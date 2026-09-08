@@ -36,6 +36,19 @@ export class S3Storage implements ObjectStorage {
     );
   }
 
+  async get(key: string): Promise<Buffer> {
+    const response = await this.client.send(new GetObjectCommand({ Bucket: this.config.bucket, Key: key }));
+    const body = response.Body;
+    if (!body) throw new Error(`S3 object ${key} has no body`);
+    const chunks: Uint8Array[] = [];
+    // @ts-expect-error -- Body's runtime type (a Node Readable in the Node SDK build) supports
+    // async-iteration even though the SDK's cross-platform type doesn't declare it generically.
+    for await (const chunk of body) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
   async getSignedGetUrl(key: string, expiresInSeconds = 3600): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.config.bucket, Key: key });
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });

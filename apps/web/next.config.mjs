@@ -8,6 +8,7 @@ const nextConfig = {
     "@av-inspection/sync-engine",
     "@av-inspection/db",
     "@av-inspection/storage",
+    "@av-inspection/ai-pipeline",
   ],
   experimental: {
     // PGlite (packages/db's ADR-007 fallback) loads its own WASM/data files at runtime via

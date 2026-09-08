@@ -26,6 +26,14 @@ describe("LocalFsStorage (ADR-007 local dev path)", () => {
     expect(readFileSync(filePath)).toEqual(body);
   });
 
+  it("get() returns the same bytes that were put()", async () => {
+    const body = Buffer.from("audio-chunk-bytes-for-the-ai-pipeline");
+    await storage.put("audio-chunks/seg1.webm", body, "audio/webm");
+
+    const readBack = await storage.get("audio-chunks/seg1.webm");
+    expect(readBack).toEqual(body);
+  });
+
   it("creates nested directories as needed", async () => {
     await storage.put("audio-chunks/2026-09-08/xyz.webm", Buffer.from("audio"), "audio/webm");
     expect(existsSync(storage.resolvePath("audio-chunks/2026-09-08/xyz.webm"))).toBe(true);

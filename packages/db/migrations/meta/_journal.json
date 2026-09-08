@@ -8,6 +8,13 @@
       "when": 1788878466751,
       "tag": "0000_flat_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788880794273,
+      "tag": "0001_redundant_wrecker",
+      "breakpoints": true
     }
   ]
 }

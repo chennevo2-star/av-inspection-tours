@@ -211,3 +211,29 @@ export const audioChunks = pgTable("audio_chunks", {
   roomId: uuid("room_id").references(() => rooms.id),
   cloudFileId: text("cloud_file_id"),
 });
+
+export const aiExtractionStatusEnum = pgEnum("ai_extraction_status", [
+  "processing",
+  "completed",
+  "failed",
+]);
+
+/**
+ * One AI-pipeline run for an inspection (spec §22–23, AI_PIPELINE.md). `rawExtraction` is the validated
+ * (schema-checked + enforceKnownEntityIds-guarded) InspectionExtraction JSON — always a Draft, never
+ * auto-applied (spec §23). Multiple rows per inspection are allowed (e.g. a re-run after a failure); the
+ * most recent `completed` row is the one Phase 6's review screen would show. Server-only — never synced
+ * from a client, so it has no SyncEntityType/client-side counterpart.
+ */
+export const aiExtractions = pgTable("ai_extractions", {
+  id: uuid("id").primaryKey(),
+  inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
+  status: aiExtractionStatusEnum("status").notNull().default("processing"),
+  transcript: text("transcript"),
+  rawExtraction: jsonb("raw_extraction"),
+  errorMessage: text("error_message"),
+  transcriptionModel: text("transcription_model"),
+  extractionModel: text("extraction_model"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});

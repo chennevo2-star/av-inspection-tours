@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ObjectStorage } from "./types.js";
 
@@ -31,6 +31,11 @@ export class LocalFsStorage implements ObjectStorage {
     const filePath = path.join(this.rootDir, safeKey);
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, body);
+  }
+
+  async get(key: string): Promise<Buffer> {
+    const safeKey = sanitizeKey(key);
+    return readFile(path.join(this.rootDir, safeKey));
   }
 
   async getSignedGetUrl(key: string): Promise<string> {
