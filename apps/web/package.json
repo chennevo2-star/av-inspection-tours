@@ -21,7 +21,8 @@
     "@av-inspection/sync-engine": "*",
     "@av-inspection/db": "*",
     "@av-inspection/storage": "*",
-    "@av-inspection/ai-pipeline": "*"
+    "@av-inspection/ai-pipeline": "*",
+    "@av-inspection/report-generator": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
