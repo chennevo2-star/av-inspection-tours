@@ -19,8 +19,21 @@ export const SyncStatus = z.enum([
 ]);
 export type SyncStatus = z.infer<typeof SyncStatus>;
 
-/** Entity types that can appear in the sync queue, in their required drain order (OFFLINE_SYNC.md). */
+/**
+ * Entity types that can appear in the sync queue, in their required drain order (OFFLINE_SYNC.md).
+ * Project/Floor/Room/Contractor were added in Phase 2: the original spec's drain order (§17) only names
+ * Inspection/Issue/Task/Photo/AudioChunk/Attachment because it's written from the field-work point of
+ * view, but §16 states every object gets a sync status, and in this app Projects/Contractors/Floors/
+ * Rooms can genuinely be created or edited locally (a project manager working offline, or a field
+ * addition mid-tour) — so they queue too. They drain first because everything else references them by
+ * id; the server needs the reference data to exist before it can accept an Inspection/Issue/Task/Photo
+ * that points at it.
+ */
 export const SyncEntityType = z.enum([
+  "Project",
+  "Floor",
+  "Room",
+  "Contractor",
   "Inspection",
   "Issue",
   "Task",
@@ -32,12 +45,16 @@ export type SyncEntityType = z.infer<typeof SyncEntityType>;
 
 /** Fixed drain priority — lower number goes first. Mirrors SyncEntityType's declared order. */
 export const SYNC_ENTITY_PRIORITY: Record<SyncEntityType, number> = {
-  Inspection: 0,
-  Issue: 1,
-  Task: 2,
-  Photo: 3,
-  AudioChunk: 4,
-  Attachment: 5,
+  Project: 0,
+  Floor: 1,
+  Room: 2,
+  Contractor: 3,
+  Inspection: 4,
+  Issue: 5,
+  Task: 6,
+  Photo: 7,
+  AudioChunk: 8,
+  Attachment: 9,
 };
 
 export const SyncOp = z.enum(["create", "update"]);

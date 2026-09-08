@@ -66,11 +66,24 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s ease;
+}
+
+.card:hover {
+  background: var(--surface-2);
 }
 
 .projectName {
   font-size: 17px;
   font-weight: 600;
+}
+
+.projectNumber {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 .syncBadge {

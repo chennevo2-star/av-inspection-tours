@@ -31,12 +31,20 @@ in practice almost everything moves to `WAITING_FOR_SYNC` immediately.
 
 ## Queue drain order (packages/sync-engine)
 
-1. Inspection metadata
-2. Issues
-3. Tasks
-4. Photos
-5. Audio chunks
-6. Other attachments
+1. Project
+2. Floor
+3. Room
+4. Contractor
+5. Inspection metadata
+6. Issues
+7. Tasks
+8. Photos
+9. Audio chunks
+10. Other attachments
+
+Reference data (Project/Floor/Room/Contractor — Phase 2) drains first because everything below it
+references those ids; the server needs them to exist before it can accept an Inspection/Issue/Task/Photo
+that points at them. See `packages/shared-types/src/sync.ts`'s `SYNC_ENTITY_PRIORITY` comment.
 
 Each item carries: `entityType`, `entityId` (UUID), `op` (create/update), `payload` or a reference to a
 local Blob, `attempts`, `lastError`, `createdAt`. The engine is push-based (drains on an `online` event
