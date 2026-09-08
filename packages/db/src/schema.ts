@@ -126,10 +126,22 @@ export const inspections = pgTable("inspections", {
 export const contextEvents = pgTable("context_events", {
   id: uuid("id").primaryKey(),
   inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(), // tie-breaker for same-millisecond events — see shared-types
   type: text("type").notNull(), // enter_floor | enter_room | photo_captured | recording_* — see shared-types
   floorId: uuid("floor_id").references(() => floors.id),
   roomId: uuid("room_id").references(() => rooms.id),
   refId: uuid("ref_id"),
+  timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
+});
+
+/** Note — see shared-types/src/entities.ts's Note comment for why this exists beyond the original §5 list. */
+export const notes = pgTable("notes", {
+  id: uuid("id").primaryKey(),
+  inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  floorId: uuid("floor_id").references(() => floors.id),
+  roomId: uuid("room_id").references(() => rooms.id),
+  text: text("text").notNull(),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
 });
 

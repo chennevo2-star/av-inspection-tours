@@ -9,13 +9,16 @@ import { updateProject } from "../../../lib/db/projects";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import { ContractorsSection } from "./contractors-section";
 import { FloorsSection } from "./floors-section";
+import { TourSection } from "./tour-section";
 import styles from "./project-screen.module.css";
 
 /**
- * Project screen (spec §8). Phase 2 scope: settings (name/number/client/address/description) +
- * Contractors + Floors&Rooms. Deliberately omits the spec's other §8 sections (סיור חדש, סיורים קודמים,
- * משימות פתוחות, תמונות, דוחות) — those need Phase 3+ (Inspections/Tasks/Photos/Reports) to actually
- * exist; a disabled-looking button for them would be exactly the kind of mock-success CLAUDE.md forbids.
+ * Project screen (spec §8). Now covers: סיור חדש/המשך סיור (Phase 3), settings
+ * (name/number/client/address/description), Contractors, Floors&Rooms. Still deliberately omits
+ * סיורים קודמים / משימות פתוחות (as their own dedicated views) / תמונות / דוחות — task-closing (§27) is
+ * reachable from inside an active tour's ✅ panel, but a standalone project-level task/report/photo
+ * history browser is Phase 6+ (Review UI) / Phase 8 (Reports) territory; a stub tab for those now would
+ * be exactly the kind of mock-success CLAUDE.md forbids.
  */
 /**
  * Dexie's `.get()` resolves to `undefined` both while a query hasn't run yet AND when the record
@@ -104,6 +107,8 @@ function ProjectBody({ project }: { project: Project }) {
       <p className={styles.subtitle}>
         {project.syncStatus === "SYNCED" ? "✅ מסונכרן" : "🟠 מקומי בלבד"}
       </p>
+
+      <TourSection projectId={project.id} />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>הגדרות פרויקט</h2>

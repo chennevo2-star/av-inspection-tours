@@ -6,20 +6,27 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { Project } from "@av-inspection/shared-types";
 import { getLocalDb } from "../lib/db/local-db";
 import { createProject } from "../lib/db/projects";
+import { getAnyActiveInspection } from "../lib/db/inspections";
 import { useMounted } from "../lib/hooks/use-mounted";
 import styles from "./home-screen.module.css";
 
 /**
- * Home screen — project list (spec §7). Each project links into its detail screen (Phase 2:
- * Contractors/Floors/Rooms/Settings — see app/projects/[id]). Still deliberately without the
- * last-inspection/open-task counts spec §7 also asks for — those need Phase 3 (Inspections) and Phase 2
- * cont'd (Tasks) to exist first; showing them now would mean showing a fake always-zero count, which is
- * exactly the kind of mock-success this project's rules (CLAUDE.md §7) forbid.
+ * Home screen — project list (spec §7) + tour-recovery banner (spec §44), which deliberately lives here
+ * rather than only on the project screen: after a crash/close, the user may land here first with no idea
+ * which project had the open tour — "נמצא סיור שלא הסתיים" has to be findable regardless. Still without
+ * the last-inspection/open-task counts spec §7 also asks for on each card — those need a dedicated
+ * inspection-history view (Phase 6+) to be meaningful; a fake always-zero count would be exactly the kind
+ * of mock-success CLAUDE.md forbids.
  */
 export function HomeScreen() {
   const mounted = useMounted();
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+
+  const activeInspection = useLiveQuery(
+    () => (mounted ? getAnyActiveInspection() : Promise.resolve(undefined)),
+    [mounted]
+  );
 
   // Both branches resolve to Promise<Project[]> (never `undefined`) so useLiveQuery's inferred type
   // stays a plain array — "still loading" is tracked separately via `mounted`/the live-query's own
@@ -48,6 +55,13 @@ export function HomeScreen() {
   return (
     <main className={styles.main}>
       <h1 className={styles.title}>פרויקטים</h1>
+
+      {activeInspection ? (
+        <Link href={`/tour/${activeInspection.id}`} className={styles.recoveryBanner}>
+          <span>⚠ נמצא סיור שלא הסתיים (#{activeInspection.inspectionNumber})</span>
+          <span className={styles.recoveryAction}>המשך סיור ←</span>
+        </Link>
+      ) : null}
 
       <form className={styles.newProjectForm} onSubmit={handleCreate}>
         <input

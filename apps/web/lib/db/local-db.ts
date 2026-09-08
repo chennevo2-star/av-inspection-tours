@@ -8,6 +8,7 @@ import type {
   Floor,
   Inspection,
   Issue,
+  Note,
   Photo,
   Project,
   Room,
@@ -36,6 +37,7 @@ export class LocalDb extends Dexie {
   contextEvents!: Table<ContextEvent, string>;
   issues!: Table<Issue, string>;
   tasks!: Table<Task, string>;
+  notes!: Table<Note, string>;
   photos!: Table<Photo, string>;
   photoBlobs!: Table<BlobRow, string>;
   audio!: Table<Audio, string>;
@@ -62,6 +64,26 @@ export class LocalDb extends Dexie {
       audioChunkBlobs: "id",
       syncQueue: "id, entityType, entityId, createdAt",
     });
+    // v2 (Phase 3): adds the Note table. A pure addition — every v1 store is repeated unchanged, per
+    // Dexie's versioning contract, so existing local data survives the upgrade untouched.
+    this.version(2).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, status, syncStatus",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
   }
 }
 
@@ -73,10 +95,15 @@ let instance: LocalDb | null = null;
  * rendering, so calling this at module-evaluation time or during an unguarded server render throws.
  */
 export function getLocalDb(): LocalDb {
-  if (typeof window === "undefined") {
+  // Checking `indexedDB` specifically (not `window`) is the precise guard: it throws correctly during
+  // real Next.js SSR (neither exists there), passes correctly in a real browser, AND lets
+  // apps/web/test/** exercise this whole module under plain Node + fake-indexeddb without needing a
+  // heavier jsdom environment — see vitest.setup.ts.
+  if (typeof indexedDB === "undefined") {
     throw new Error(
-      "getLocalDb() called outside the browser. Local storage is client-only — guard the call site with " +
-        "a mounted/isClient check (see apps/web/app/home-screen.tsx for the pattern)."
+      "getLocalDb() called with no IndexedDB available. In the app, guard the call site with a " +
+        "mounted/isClient check (see apps/web/app/home-screen.tsx for the pattern); in a test, import " +
+        "'fake-indexeddb/auto' first (see vitest.setup.ts)."
     );
   }
   if (!instance) instance = new LocalDb();

@@ -158,10 +158,18 @@ export type Inspection = z.infer<typeof Inspection>;
 /**
  * Timeline event recorded when the inspector changes room/floor or performs a notable action, used to
  * align the transcript to room/floor/photo context by timestamp (spec §12).
+ *
+ * `sequence` (not in the original spec) was added after a real bug: two events logged in quick
+ * succession (e.g. picking a floor and its room from one combined action) can land on the exact same
+ * millisecond, making `timestamp` alone an unreliable sort key — `getCurrentPosition()`
+ * (apps/web/lib/db/context-events.ts) needs unambiguous ordering to reconstruct "where is the inspector
+ * right now" correctly, including for Recovery (spec §44). `timestamp` remains the wall-clock value the
+ * AI pipeline aligns the transcript against; `sequence` exists purely to break ties correctly.
  */
 export const ContextEvent = z.object({
   id: uuid(),
   inspectionId: uuid(),
+  sequence: z.number().int().min(0),
   type: z.enum(["enter_floor", "enter_room", "photo_captured", "recording_started", "recording_paused", "recording_resumed", "recording_interrupted"]),
   floorId: uuid().nullable().default(null),
   roomId: uuid().nullable().default(null),
@@ -169,6 +177,26 @@ export const ContextEvent = z.object({
   timestamp: isoDateTime(),
 });
 export type ContextEvent = z.infer<typeof ContextEvent>;
+
+/* ------------------------------------------------------------------------------------------------
+ * Note — not in the spec's own §5 entity list, but §10's field UI explicitly requires a "📝 הערה"
+ * quick-action alongside ⚠️ ליקוי / ✅ משימה, and there's nowhere in the original entity list for a
+ * quick free-text field note to live. Added here as the minimal honest backing for that button — a
+ * timestamped, room/floor/inspection-scoped text note, structurally identical in spirit to Issue/Task
+ * but without their workflow fields (status/priority/contractor) since a note isn't a tracked item.
+ * ---------------------------------------------------------------------------------------------- */
+
+export const Note = z.object({
+  id: uuid(),
+  inspectionId: uuid(),
+  projectId: uuid(),
+  floorId: uuid().nullable().default(null),
+  roomId: uuid().nullable().default(null),
+  text: z.string().min(1),
+  timestamp: isoDateTime(),
+  syncStatus: SyncStatus.default("LOCAL_ONLY"),
+});
+export type Note = z.infer<typeof Note>;
 
 /* ------------------------------------------------------------------------------------------------
  * Issue / Finding (spec §Issue)

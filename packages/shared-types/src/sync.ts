@@ -37,6 +37,7 @@ export const SyncEntityType = z.enum([
   "Inspection",
   "Issue",
   "Task",
+  "Note",
   "Photo",
   "AudioChunk",
   "Attachment",
@@ -52,9 +53,10 @@ export const SYNC_ENTITY_PRIORITY: Record<SyncEntityType, number> = {
   Inspection: 4,
   Issue: 5,
   Task: 6,
-  Photo: 7,
-  AudioChunk: 8,
-  Attachment: 9,
+  Note: 7,
+  Photo: 8,
+  AudioChunk: 9,
+  Attachment: 10,
 };
 
 export const SyncOp = z.enum(["create", "update"]);
