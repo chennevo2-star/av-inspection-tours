@@ -84,6 +84,27 @@ export class LocalDb extends Dexie {
       audioChunkBlobs: "id",
       syncQueue: "id, entityType, entityId, createdAt",
     });
+    // v3: Task gains floorId/roomId/timestamp (the new task wizard's data model — see PROJECT
+    // memory/commit history for "New Task wizard" for why). Existing task rows just get these as
+    // undefined/missing until edited, which is fine — the fields are all optional/nullable.
+    this.version(3).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
   }
 }
 

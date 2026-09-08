@@ -233,6 +233,8 @@ export const Task = z.object({
   id: uuid(),
   issueId: uuid().nullable().default(null),
   projectId: uuid(),
+  floorId: uuid().nullable().default(null),
+  roomId: uuid().nullable().default(null),
   friendlyNumber: z.number().int().nullable().default(null),
   description: z.string().min(1),
   responsibleParty: z.string().nullable().default(null),
@@ -241,6 +243,7 @@ export const Task = z.object({
   lastUpdatedInspectionId: uuid().nullable().default(null),
   closedInspectionId: uuid().nullable().default(null),
   dueDate: z.string().date().nullable().default(null),
+  timestamp: isoDateTime().default(() => new Date().toISOString()), // when the task was created — drives "most recent first" ordering
   syncStatus: SyncStatus.default("LOCAL_ONLY"),
 });
 export type Task = z.infer<typeof Task>;

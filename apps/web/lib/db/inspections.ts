@@ -7,7 +7,11 @@ import { enqueueSync } from "../sync/enqueue";
  * inspection number is derived from the local count of the project's own inspections; it's a display
  * number only (spec §31), the real join key is always the UUID.
  */
-export async function startInspection(projectId: string, inspector: string): Promise<Inspection> {
+export async function startInspection(
+  projectId: string,
+  inspector: string,
+  participants: string[] = []
+): Promise<Inspection> {
   const db = getLocalDb();
   const existingCount = await db.inspections.where("projectId").equals(projectId).count();
   const now = new Date();
@@ -20,7 +24,7 @@ export async function startInspection(projectId: string, inspector: string): Pro
     startTime: now.toISOString(),
     endTime: null,
     inspector,
-    participants: [],
+    participants,
     status: "בתהליך",
     syncStatus: "LOCAL_ONLY",
     aiStatus: "לא_רלוונטי",
@@ -29,6 +33,30 @@ export async function startInspection(projectId: string, inspector: string): Pro
   await db.inspections.add(inspection);
   await enqueueSync("Inspection", inspection.id, "create", inspection);
   return inspection;
+}
+
+/**
+ * Appends a name to the inspection's participant list if it isn't already there (e.g. the New Task
+ * wizard's "add manually" option for "באחריות") — grows the list in place so the new name is available
+ * for the rest of this tour's tasks too, not just a one-off value.
+ */
+export async function addParticipant(inspectionId: string, name: string): Promise<Inspection> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("addParticipant: name must not be empty");
+
+  const db = getLocalDb();
+  const existing = await db.inspections.get(inspectionId);
+  if (!existing) throw new Error(`addParticipant: inspection ${inspectionId} not found locally`);
+  if (existing.participants.includes(trimmed)) return existing;
+
+  const updated = Inspection.parse({
+    ...existing,
+    participants: [...existing.participants, trimmed],
+    syncStatus: existing.syncStatus === "SYNCED" ? "WAITING_FOR_SYNC" : existing.syncStatus,
+  });
+  await db.inspections.put(updated);
+  await enqueueSync("Inspection", inspectionId, "update", updated);
+  return updated;
 }
 
 export async function getInspection(id: string): Promise<Inspection | undefined> {

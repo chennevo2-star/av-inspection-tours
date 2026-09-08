@@ -3,7 +3,7 @@ import { getLocalDb } from "../../lib/db/local-db";
 import { startInspection } from "../../lib/db/inspections";
 import { createNote, listNotes } from "../../lib/db/notes";
 import { createIssue, listIssues } from "../../lib/db/issues";
-import { closeTask, createTask, listOpenTasks } from "../../lib/db/tasks";
+import { closeTask, createTask, listOpenTasks, listTasksForInspection } from "../../lib/db/tasks";
 import { capturePhoto, getPhotoBlob, listPhotos } from "../../lib/db/photos";
 import { resetLocalDb } from "./helpers";
 
@@ -59,7 +59,11 @@ describe("Issue (spec §10 ⚠️ ליקוי, §94 QA scenario)", () => {
 describe("Task (spec §10 ✅ משימה, §27 close-not-duplicate)", () => {
   it("creates an open task and lists it under open tasks", async () => {
     const inspection = await startInspection(PROJECT, "דני");
-    const task = await createTask(PROJECT, inspection.id, "השלמת חיבור HDMI בעמדת מנהל");
+    const task = await createTask({
+      projectId: PROJECT,
+      inspectionId: inspection.id,
+      description: "השלמת חיבור HDMI בעמדת מנהל",
+    });
 
     expect(task.status).toBe("פתוח");
     expect(task.createdInspectionId).toBe(inspection.id);
@@ -68,9 +72,38 @@ describe("Task (spec §10 ✅ משימה, §27 close-not-duplicate)", () => {
     expect(open.map((t) => t.id)).toContain(task.id);
   });
 
+  it("carries floorId/roomId (the New Task wizard's step 1) through", async () => {
+    const inspection = await startInspection(PROJECT, "דני");
+    const task = await createTask({
+      projectId: PROJECT,
+      inspectionId: inspection.id,
+      description: "בדיקת מיקום",
+      floorId: "11111111-1111-1111-1111-111111111111",
+      roomId: ROOM,
+    });
+
+    expect(task.floorId).toBe("11111111-1111-1111-1111-111111111111");
+    expect(task.roomId).toBe(ROOM);
+  });
+
+  it("listTasksForInspection returns most-recently-created first", async () => {
+    const inspection = await startInspection(PROJECT, "דני");
+    const first = await createTask({ projectId: PROJECT, inspectionId: inspection.id, description: "משימה 1" });
+    const second = await createTask({ projectId: PROJECT, inspectionId: inspection.id, description: "משימה 2" });
+    const third = await createTask({ projectId: PROJECT, inspectionId: inspection.id, description: "משימה 3" });
+
+    const listed = await listTasksForInspection(inspection.id);
+
+    expect(listed.map((t) => t.id)).toEqual([third.id, second.id, first.id]);
+  });
+
   it("closeTask closes a task from a later inspection and records which one closed it", async () => {
     const firstTour = await startInspection(PROJECT, "דני");
-    const task = await createTask(PROJECT, firstTour.id, "השלמת חיבור HDMI בעמדת מנהל");
+    const task = await createTask({
+      projectId: PROJECT,
+      inspectionId: firstTour.id,
+      description: "השלמת חיבור HDMI בעמדת מנהל",
+    });
 
     const laterTour = await startInspection(PROJECT, "דני");
     const closed = await closeTask(task.id, laterTour.id);

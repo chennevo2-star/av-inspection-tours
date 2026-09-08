@@ -15,6 +15,13 @@
       "when": 1788880794273,
       "tag": "0001_redundant_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788894897926,
+      "tag": "0002_true_lizard",
+      "breakpoints": true
     }
   ]
 }

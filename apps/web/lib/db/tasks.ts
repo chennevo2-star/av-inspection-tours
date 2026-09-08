@@ -2,28 +2,35 @@ import { Task } from "@av-inspection/shared-types";
 import { getLocalDb } from "./local-db";
 import { enqueueSync } from "../sync/enqueue";
 
-/** Quick field-created task (spec §10 "✅ משימה"), not tied to a specific Issue. */
-export async function createTask(
-  projectId: string,
-  inspectionId: string,
-  description: string,
-  responsibleParty: string | null = null
-): Promise<Task> {
+export interface CreateTaskInput {
+  projectId: string;
+  inspectionId: string;
+  description: string;
+  responsibleParty?: string | null;
+  floorId?: string | null;
+  roomId?: string | null;
+}
+
+/** Field-created task (spec §10 "✅ משימה" / the New Task wizard), not tied to a specific Issue. */
+export async function createTask(input: CreateTaskInput): Promise<Task> {
   const db = getLocalDb();
-  const existingCount = await db.tasks.where("projectId").equals(projectId).count();
+  const existingCount = await db.tasks.where("projectId").equals(input.projectId).count();
 
   const task = Task.parse({
     id: crypto.randomUUID(),
     issueId: null,
-    projectId,
+    projectId: input.projectId,
+    floorId: input.floorId ?? null,
+    roomId: input.roomId ?? null,
     friendlyNumber: existingCount + 1,
-    description,
-    responsibleParty,
+    description: input.description,
+    responsibleParty: input.responsibleParty ?? null,
     status: "פתוח",
-    createdInspectionId: inspectionId,
+    createdInspectionId: input.inspectionId,
     lastUpdatedInspectionId: null,
     closedInspectionId: null,
     dueDate: null,
+    timestamp: new Date().toISOString(),
     syncStatus: "LOCAL_ONLY",
   });
   await db.tasks.add(task);
@@ -35,6 +42,17 @@ export async function createTask(
 export async function listOpenTasks(projectId: string): Promise<Task[]> {
   const tasks = await getLocalDb().tasks.where("projectId").equals(projectId).toArray();
   return tasks.filter((t) => t.status === "פתוח" || t.status === "בטיפול" || t.status === "ממתין");
+}
+
+/**
+ * Every task created during one specific tour, most-recently-created first (the "טבלת משימות" screen).
+ * Sorted by `friendlyNumber` (a real monotonic per-project counter), not `timestamp` — the same class of
+ * bug already hit once with ContextEvent applies here too: two tasks created in quick succession could
+ * land on the same millisecond, making timestamp-only ordering unstable.
+ */
+export async function listTasksForInspection(inspectionId: string): Promise<Task[]> {
+  const tasks = await getLocalDb().tasks.where("createdInspectionId").equals(inspectionId).toArray();
+  return tasks.sort((a, b) => (b.friendlyNumber ?? 0) - (a.friendlyNumber ?? 0));
 }
 
 /** Closes a previously-open task from the current inspection (spec §27 — "סגור משימה #14"). */

@@ -170,6 +170,8 @@ export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey(),
   issueId: uuid("issue_id").references(() => issues.id),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  floorId: uuid("floor_id").references(() => floors.id),
+  roomId: uuid("room_id").references(() => rooms.id),
   friendlyNumber: integer("friendly_number"),
   description: text("description").notNull(),
   responsibleParty: text("responsible_party"),
@@ -178,6 +180,7 @@ export const tasks = pgTable("tasks", {
   lastUpdatedInspectionId: uuid("last_updated_inspection_id").references(() => inspections.id),
   closedInspectionId: uuid("closed_inspection_id").references(() => inspections.id),
   dueDate: date("due_date"),
+  timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const photos = pgTable("photos", {

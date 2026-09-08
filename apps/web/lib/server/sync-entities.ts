@@ -144,6 +144,8 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     id: t.id,
     issueId: t.issueId,
     projectId: t.projectId,
+    floorId: t.floorId,
+    roomId: t.roomId,
     friendlyNumber: t.friendlyNumber,
     description: t.description,
     responsibleParty: t.responsibleParty,
@@ -152,6 +154,7 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     lastUpdatedInspectionId: t.lastUpdatedInspectionId,
     closedInspectionId: t.closedInspectionId,
     dueDate: t.dueDate,
+    timestamp: isoToDate(t.timestamp),
   })),
 
   Note: handler(Note, notes, (n) => ({
