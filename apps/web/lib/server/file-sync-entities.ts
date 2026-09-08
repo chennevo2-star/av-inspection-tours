@@ -3,10 +3,11 @@ import { audioChunks, getDb, photos } from "@av-inspection/db";
 import { getStorage } from "@av-inspection/storage";
 import { extensionForMimeType } from "./mime.js";
 
-/** Same shape as JsonSyncHandler (sync-entities.ts) but for the two entities that carry a Blob
- * (spec §18 — audio/photos never go through the JSON path, never inlined into Postgres). */
+/** Same shape as JsonSyncHandler (sync-entities.ts) but for the two entities that carry binary data
+ * (spec §18 — audio/photos never go through the JSON path, never inlined into Postgres). Takes raw
+ * bytes + a mime type directly (not a `File`/multipart) — see the route's own comment for why. */
 export interface FileSyncHandler {
-  upsert(rawMeta: unknown, file: File): Promise<void>;
+  upsert(rawMeta: unknown, bytes: Uint8Array, contentType: string): Promise<void>;
 }
 
 const isoToDate = (iso: string) => new Date(iso);
@@ -19,11 +20,10 @@ function fileHandler<T extends { id: string }>(
   toRow: (entity: T, cloudFileId: string) => Record<string, unknown>
 ): FileSyncHandler {
   return {
-    async upsert(rawMeta: unknown, file: File) {
+    async upsert(rawMeta: unknown, bytes: Uint8Array, contentType: string) {
       const entity = schema.parse(rawMeta);
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const key = `${keyPrefix}/${entity.id}.${extensionForMimeType(file.type)}`;
-      await getStorage().put(key, bytes, file.type);
+      const key = `${keyPrefix}/${entity.id}.${extensionForMimeType(contentType)}`;
+      await getStorage().put(key, bytes, contentType);
 
       const row = toRow(entity, key);
       await getDb().insert(table).values(row).onConflictDoUpdate({ target: table.id, set: row });

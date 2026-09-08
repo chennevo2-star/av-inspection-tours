@@ -11,8 +11,10 @@ const BLOB_TABLE_FOR_ENTITY: Partial<Record<string, "photoBlobs" | "audioChunkBl
  * The real transport behind packages/sync-engine's SyncQueue — talks to
  * apps/web/app/api/sync/[entityType]/route.ts. Photo/AudioChunk items carry their Blob's local table +
  * key inside their own payload (see lib/db/photos.ts, lib/recording/use-audio-recorder.ts) — this class
- * is what actually reads the Blob out of Dexie and attaches it as multipart form data; every other
- * entity is a plain JSON POST.
+ * is what actually reads the Blob out of Dexie and PUTs it as a raw request body (metadata in
+ * `?meta=`); every other entity is a plain JSON POST. Raw PUT, not multipart, after real-device testing
+ * (over a Cloudflare quick tunnel) hit "no boundary found in multipart body" on the exact same request
+ * that worked fine direct-to-localhost — see the route's own comment.
  */
 export class HttpSyncTransport implements SyncTransport {
   constructor(private readonly baseUrl: string = "/api/sync") {}
@@ -70,10 +72,13 @@ export class HttpSyncTransport implements SyncTransport {
       throw new NonRetriableTransportError(`Local blob ${localFileId} no longer exists on this device`);
     }
 
-    const formData = new FormData();
-    formData.append("meta", JSON.stringify(item.payload));
-    formData.append("file", blobRow.blob, localFileId);
-    return fetch(`${this.baseUrl}/${item.entityType}`, { method: "POST", body: formData });
+    const meta = encodeURIComponent(JSON.stringify(item.payload ?? {}));
+    const contentType = blobRow.blob.type || "application/octet-stream";
+    return fetch(`${this.baseUrl}/${item.entityType}?meta=${meta}`, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: blobRow.blob,
+    });
   }
 }
 

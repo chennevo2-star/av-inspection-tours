@@ -1,4 +1,5 @@
 import {
+  Audio,
   Contractor,
   ContractorAlias,
   Floor,
@@ -10,6 +11,7 @@ import {
   Task,
 } from "@av-inspection/shared-types";
 import {
+  audio,
   contractorAliases,
   contractors,
   floors,
@@ -160,5 +162,15 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     roomId: n.roomId,
     text: n.text,
     timestamp: isoToDate(n.timestamp),
+  })),
+
+  // Must be synced before AudioChunk — see SYNC_ENTITY_PRIORITY's comment (shared-types/sync.ts) for
+  // the real bug this fixed (every AudioChunk permanently failing its FK check).
+  Audio: handler(Audio, audio, (a) => ({
+    id: a.id,
+    inspectionId: a.inspectionId,
+    startTime: isoToDate(a.startTime),
+    endTime: a.endTime ? isoToDate(a.endTime) : null,
+    transcriptionStatus: a.transcriptionStatus,
   })),
 };

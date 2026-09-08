@@ -161,10 +161,11 @@ export function useAudioRecorder(
         transcriptionStatus: "ממתין",
         syncStatus: "LOCAL_ONLY",
       });
-      // Audio (the session header row) isn't independently sync-queued, same reasoning as ContextEvent
-      // (see lib/db/context-events.ts): it's cheap and always implied by its own AudioChunks, which are
-      // queued individually. Phase 4's server can upsert it from the first chunk it receives.
       await db.audio.add(audio);
+      // Audio has a real, ordinary sync lifecycle (fixed after real-device testing found every
+      // AudioChunk permanently failing its FK check — the parent Audio row this used to say would be
+      // "upserted from the first chunk" server-side was never actually implemented anywhere).
+      await enqueueSync("Audio", audio.id, "create", audio);
       audioIdRef.current = audio.id;
 
       sequenceRef.current = 0;
@@ -222,7 +223,11 @@ export function useAudioRecorder(
     if (audioIdRef.current) {
       const db = getLocalDb();
       const audio = await db.audio.get(audioIdRef.current);
-      if (audio) await db.audio.put({ ...audio, endTime: new Date().toISOString() });
+      if (audio) {
+        const updated: Audio = { ...audio, endTime: new Date().toISOString() };
+        await db.audio.put(updated);
+        await enqueueSync("Audio", updated.id, "update", updated);
+      }
     }
 
     setStatusBoth("idle");

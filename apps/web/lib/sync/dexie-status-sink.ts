@@ -11,6 +11,7 @@ type LocalDbTableName =
   | "issues"
   | "tasks"
   | "notes"
+  | "audio"
   | "photos"
   | "audioChunks";
 
@@ -25,6 +26,7 @@ const TABLE_FOR_ENTITY: Partial<Record<SyncEntityType, LocalDbTableName>> = {
   Issue: "issues",
   Task: "tasks",
   Note: "notes",
+  Audio: "audio",
   Photo: "photos",
   AudioChunk: "audioChunks",
 };

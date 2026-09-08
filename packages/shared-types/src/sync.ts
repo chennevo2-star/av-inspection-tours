@@ -39,13 +39,22 @@ export const SyncEntityType = z.enum([
   "Issue",
   "Task",
   "Note",
+  "Audio",
   "Photo",
   "AudioChunk",
   "Attachment",
 ]);
 export type SyncEntityType = z.infer<typeof SyncEntityType>;
 
-/** Fixed drain priority — lower number goes first. Mirrors SyncEntityType's declared order. */
+/**
+ * Fixed drain priority — lower number goes first. Mirrors SyncEntityType's declared order.
+ * `Audio` must drain before `AudioChunk` — a real bug (found via real-device testing, not by
+ * inspection) was every AudioChunk permanently failing its FK check because the parent Audio row was
+ * never actually synced at all (an earlier version of this file's comment, and of
+ * lib/recording/use-audio-recorder.ts, claimed the server would "upsert Audio from the first chunk it
+ * receives" — that was never implemented; Audio gets a real, ordinary sync lifecycle instead, same as
+ * every other entity).
+ */
 export const SYNC_ENTITY_PRIORITY: Record<SyncEntityType, number> = {
   Project: 0,
   Floor: 1,
@@ -56,9 +65,10 @@ export const SYNC_ENTITY_PRIORITY: Record<SyncEntityType, number> = {
   Issue: 6,
   Task: 7,
   Note: 8,
-  Photo: 9,
-  AudioChunk: 10,
-  Attachment: 11,
+  Audio: 9,
+  Photo: 10,
+  AudioChunk: 11,
+  Attachment: 12,
 };
 
 export const SyncOp = z.enum(["create", "update"]);

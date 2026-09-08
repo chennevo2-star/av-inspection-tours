@@ -40,9 +40,16 @@ in practice almost everything moves to `WAITING_FOR_SYNC` immediately.
 7. Issues
 8. Tasks
 9. Notes
-10. Photos
-11. Audio chunks
-12. Other attachments
+10. Audio (the recording session header — must precede its own chunks; see below)
+11. Photos
+12. Audio chunks
+13. Other attachments
+
+**Audio before AudioChunk is load-bearing, not cosmetic**: a real device-testing session found every
+AudioChunk permanently failing its server-side foreign-key check, because the Audio row it belongs to was
+never actually synced — an earlier draft of this doc (and of the recording code) assumed the server would
+"upsert Audio from the first chunk it receives," but that was never implemented. Audio now has the same
+ordinary create/update sync lifecycle as everything else.
 
 Reference data (Project/Floor/Room/Contractor — Phase 2) drains first because everything below it
 references those ids; the server needs them to exist before it can accept an Inspection/Issue/Task/Photo
