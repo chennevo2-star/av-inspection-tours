@@ -67,9 +67,16 @@ describe.skipIf(!hasSoffice)("DOCX → PDF via real LibreOffice headless", () =>
       try {
         await writeFile(docxPath, docxBuffer);
 
-        await execFileAsync(SOFFICE_PATH, ["--headless", "--convert-to", "pdf", "--outdir", workDir, docxPath], {
-          timeout: 60_000,
-        });
+        // -env:UserInstallation=<unique dir>: without it, this concurrent run can collide with the
+        // route's own soffice invocation (or a second run of this same test) over LibreOffice's shared
+        // default profile lock -- a real bug found and fixed the same way in the actual API route
+        // (apps/web/app/api/report/docx-to-pdf/route.ts). Keeping both call sites isolated the same way.
+        const profileUri = `file:///${path.join(workDir, "lo-profile").replace(/\\/g, "/")}`;
+        await execFileAsync(
+          SOFFICE_PATH,
+          [`-env:UserInstallation=${profileUri}`, "--headless", "--convert-to", "pdf", "--outdir", workDir, docxPath],
+          { timeout: 60_000 }
+        );
 
         const pdfPath = path.join(workDir, "report.pdf");
         const pdfBytes = await readFile(pdfPath);

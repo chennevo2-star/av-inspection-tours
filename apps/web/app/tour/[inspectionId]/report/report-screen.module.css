@@ -1,0 +1,328 @@
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+
+.header {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backLink {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  align-self: flex-start;
+  padding: 4px 0;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+.metaBlock {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.metaBlock strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.logoWarning {
+  color: var(--warn);
+}
+
+.section {
+  padding: 18px;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.sectionTitle {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.sectionCount {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.textArea {
+  width: 100%;
+  min-height: 110px;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 14px;
+  padding: 14px;
+  font-size: 15px;
+  resize: vertical;
+}
+
+.dictateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dictateButton {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dictateButtonListening {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.dictateHint {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.emptyTasks {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.reorderHint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: -4px 0 12px;
+}
+
+.taskList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.taskCard {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 14px;
+  padding: 12px;
+  touch-action: pan-y;
+}
+
+.taskCardSelected {
+  border-color: var(--accent);
+}
+
+.taskCardDragging {
+  opacity: 0.85;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  border-color: var(--accent);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dragHandle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  padding: 6px;
+  touch-action: none;
+  cursor: grab;
+  line-height: 1;
+}
+
+.taskNumber {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.cardTopSpacer {
+  flex: 1;
+}
+
+.selectCircle {
+  background: transparent;
+  border: 2px solid var(--surface-2);
+  color: transparent;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.selectCircleActive {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.trashButton {
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+  padding: 0;
+}
+
+.locationRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.locationRow input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.descriptionInput {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 15px;
+  resize: vertical;
+  min-height: 60px;
+  margin-bottom: 8px;
+}
+
+.metaEditRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.metaEditRow input {
+  flex: 2;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.metaEditRow select {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 6px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.photoRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.photoThumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.photoThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.exportSection {
+  padding: 18px;
+}
+
+.exportButtons {
+  display: flex;
+  gap: 10px;
+}
+
+.exportButton {
+  flex: 1;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 16px 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.exportButton:disabled {
+  opacity: 0.5;
+}
+
+.exportButtonSecondary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.exportStatus {
+  margin-top: 12px;
+  font-size: 14px;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.exportStatusSuccess {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-2);
+}
+
+.exportStatusError {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 40px 20px;
+  text-align: center;
+}

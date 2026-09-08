@@ -8,6 +8,19 @@ import path from "node:path";
 const execFileAsync = promisify(execFile);
 
 /**
+ * LibreOffice's default headless invocation shares one per-user profile and its lock file across every
+ * concurrent `soffice` process — a real bug found here (two conversions started close together, e.g. a
+ * retry or two browser tabs, or this route running alongside packages/report-generator's own PDF test)
+ * fail with a plain "Command failed" because the second process can't acquire that lock. `-env:
+ * UserInstallation=<unique dir>` gives each invocation its own isolated profile so concurrent
+ * conversions can't collide — the standard fix for this well-known LibreOffice headless limitation.
+ */
+function toFileUri(absolutePath: string): string {
+  const normalized = absolutePath.replace(/\\/g, "/");
+  return normalized.startsWith("/") ? `file://${normalized}` : `file:///${normalized}`;
+}
+
+/**
  * DOCX → PDF, server-side, via LibreOffice headless (ADR-004 — PDF is always derived from the exact
  * DOCX, never generated independently, so the two can never visually diverge). Real, and only as
  * reliable as LibreOffice actually being installed on this machine — see ADR-007/ADR-004 for the
@@ -23,13 +36,16 @@ export async function POST(request: NextRequest) {
 
   const workDir = await mkdtemp(path.join(tmpdir(), "av-inspection-docx2pdf-"));
   const docxPath = path.join(workDir, "report.docx");
+  const profileDir = path.join(workDir, "lo-profile");
 
   try {
     await writeFile(docxPath, docxBytes);
 
-    await execFileAsync(sofficePath, ["--headless", "--convert-to", "pdf", "--outdir", workDir, docxPath], {
-      timeout: 60_000,
-    });
+    await execFileAsync(
+      sofficePath,
+      [`-env:UserInstallation=${toFileUri(profileDir)}`, "--headless", "--convert-to", "pdf", "--outdir", workDir, docxPath],
+      { timeout: 60_000 }
+    );
 
     const pdfPath = path.join(workDir, "report.pdf");
     const pdfBytes = await readFile(pdfPath);

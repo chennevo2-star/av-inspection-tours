@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInspectionReportDocument, packToBuffer } from "@av-inspection/report-generator";
+import { buildInspectionReportDocument, packToBlob } from "@av-inspection/report-generator";
 import type { InspectionReportData } from "@av-inspection/report-generator";
 
 // Real HTTP round-trip against the actual running dev server (localhost:3000) — not a mocked handler.
@@ -39,13 +39,16 @@ describe.skipIf(!serverUp)("POST /api/report/docx-to-pdf — real route on the r
   it(
     "converts a real generated DOCX to a real PDF over HTTP",
     async () => {
+      // packToBlob, not packToBuffer -- report-screen.tsx (the real caller in the browser) only ever
+      // has a Blob available, so exercising that same path here keeps this test honest about what
+      // production code actually sends, and sidesteps a real TS BodyInit/Buffer typing mismatch too.
       const doc = buildInspectionReportDocument(sampleData());
-      const docxBuffer = await packToBuffer(doc);
+      const docxBlob = await packToBlob(doc);
 
       const res = await fetch(`${DEV_SERVER_URL}/api/report/docx-to-pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-        body: docxBuffer,
+        body: docxBlob,
       });
 
       expect(res.status).toBe(200);
