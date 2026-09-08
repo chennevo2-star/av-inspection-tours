@@ -1,0 +1,26 @@
+{
+  "name": "av-inspection-tours",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline-first PWA for supervisory AV/multimedia inspection tours — recording, photos, AI-assisted draft reports, Hebrew RTL DOCX/PDF output.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "@types/node": "^20.14.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

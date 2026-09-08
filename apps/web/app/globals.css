@@ -1,0 +1,48 @@
+:root {
+  --bg: #0b1220;
+  --surface: #141c2e;
+  --surface-2: #1c2740;
+  --text: #f5f7fa;
+  --text-muted: #94a3b8;
+  --accent: #2563eb;
+  --accent-2: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, "Noto Sans Hebrew", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Baseline for the large-touch-target field UI built in later phases (spec §75, §42). */
+.touch-target {
+  min-height: 56px;
+  min-width: 56px;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
