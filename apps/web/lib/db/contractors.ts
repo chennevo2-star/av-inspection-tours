@@ -41,9 +41,11 @@ export async function deleteContractor(id: string): Promise<void> {
 }
 
 /**
- * Alias matching (spec §25 — "סינמה"/"הדסינמה"/"Hadas Cinema" → one Contractor_ID). Aliases are lookup
- * data owned by their contractor; they don't get their own SyncEntityType — they travel inside the
- * Contractor payload once Phase 4 wires real sync (see packages/shared-types's ContractorAlias comment).
+ * Alias matching (spec §25 — "סינמה"/"הדסינמה"/"Hadas Cinema" → one Contractor_ID). Aliases have their own
+ * SyncEntityType ("ContractorAlias") — an earlier version of this comment claimed they'd travel inside
+ * the Contractor's own payload instead, but nothing ever actually re-enqueued the Contractor when an
+ * alias changed, so aliases silently never synced at all. Fixed in Phase 4 by giving them their own real
+ * queue entry, same pattern as every other simple entity.
  */
 export async function addContractorAlias(contractorId: string, alias: string): Promise<ContractorAlias> {
   const trimmed = alias.trim();
@@ -55,6 +57,7 @@ export async function addContractorAlias(contractorId: string, alias: string): P
     alias: trimmed,
   });
   await getLocalDb().contractorAliases.add(record);
+  await enqueueSync("ContractorAlias", record.id, "create", record);
   return record;
 }
 

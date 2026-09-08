@@ -1,0 +1,37 @@
+# Real Postgres + S3-compatible storage (ADR-004), for whenever Docker is available on this machine.
+# Not run/verified in this project's own sessions so far — see ADR-007. Until then, packages/db and
+# packages/storage fall back to PGlite + local-filesystem storage automatically (no config needed).
+#
+# Usage once Docker is installed:
+#   docker compose up -d
+#   cp .env.example .env.local        # then fill in DATABASE_URL / S3_* from the values below
+#   npm run db:migrate -w packages/db
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: av_inspection_tours
+      POSTGRES_USER: av_inspection
+      POSTGRES_PASSWORD: dev_only_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: av_inspection
+      MINIO_ROOT_PASSWORD: dev_only_password
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:

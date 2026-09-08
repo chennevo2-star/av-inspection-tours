@@ -35,13 +35,14 @@ in practice almost everything moves to `WAITING_FOR_SYNC` immediately.
 2. Floor
 3. Room
 4. Contractor
-5. Inspection metadata
-6. Issues
-7. Tasks
-8. Notes
-9. Photos
-10. Audio chunks
-11. Other attachments
+5. ContractorAlias
+6. Inspection metadata
+7. Issues
+8. Tasks
+9. Notes
+10. Photos
+11. Audio chunks
+12. Other attachments
 
 Reference data (Project/Floor/Room/Contractor — Phase 2) drains first because everything below it
 references those ids; the server needs them to exist before it can accept an Inspection/Issue/Task/Photo

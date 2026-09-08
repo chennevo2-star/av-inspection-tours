@@ -16,8 +16,11 @@
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.7",
     "zod": "^3.23.0",
+    "drizzle-orm": "^0.33.0",
     "@av-inspection/shared-types": "*",
-    "@av-inspection/sync-engine": "*"
+    "@av-inspection/sync-engine": "*",
+    "@av-inspection/db": "*",
+    "@av-inspection/storage": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

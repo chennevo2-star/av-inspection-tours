@@ -13,3 +13,5 @@ Thumbs.db
 *.tsbuildinfo
 .turbo/
 local-uploads/
+.pglite-data/
+.local-uploads/

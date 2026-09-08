@@ -1,2 +1,2 @@
 export * from "./schema.js";
-export { getDb } from "./client.js";
+export { getDb, getDbDriver, runMigrations } from "./client.js";
