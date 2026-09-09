@@ -3,7 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
+import Link from "next/link";
 import { getActiveInspectionForProject, startInspection } from "../../../lib/db/inspections";
+import { listInspectors } from "../../../lib/db/inspectors";
 import styles from "./project-screen.module.css";
 
 /** A remembered convenience only (per-device, per-browser) — never treated as authentication/identity. */
@@ -18,9 +20,12 @@ const INSPECTOR_STORAGE_KEY = "av-inspection-tours:last-inspector-name";
 export function TourSection({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [inspector, setInspector] = useState("");
+  const [inspectorId, setInspectorId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<string[]>([]);
   const [participantInput, setParticipantInput] = useState("");
   const [starting, setStarting] = useState(false);
+
+  const inspectorBank = useLiveQuery(listInspectors, []);
 
   useEffect(() => {
     try {
@@ -31,6 +36,24 @@ export function TourSection({ projectId }: { projectId: string }) {
       // never required, so just skip it silently.
     }
   }, []);
+
+  // Once the bank has loaded, if the remembered name matches a real bank inspector, re-select them (so
+  // the stamp is picked up again automatically) rather than leaving it as a plain, id-less free-text name.
+  useEffect(() => {
+    if (!inspectorBank || inspectorId) return;
+    const match = inspectorBank.find((i) => i.name === inspector);
+    if (match) setInspectorId(match.id);
+  }, [inspectorBank, inspector, inspectorId]);
+
+  function selectBankInspector(id: string, name: string) {
+    setInspectorId(id);
+    setInspector(name);
+  }
+
+  function handleInspectorTyped(value: string) {
+    setInspector(value);
+    setInspectorId(null); // free-text entry is always ad-hoc, even if it happens to match a bank name
+  }
 
   const activeInspection = useLiveQuery(() => getActiveInspectionForProject(projectId), [projectId]);
 
@@ -56,7 +79,7 @@ export function TourSection({ projectId }: { projectId: string }) {
       } catch {
         // Same as above — non-fatal.
       }
-      const inspection = await startInspection(projectId, name, participants);
+      const inspection = await startInspection(projectId, name, participants, inspectorId);
       router.push(`/tour/${inspection.id}`);
     } finally {
       setStarting(false);
@@ -76,14 +99,33 @@ export function TourSection({ projectId }: { projectId: string }) {
         </>
       ) : (
         <>
+          {inspectorBank && inspectorBank.length > 0 ? (
+            <div className={styles.aliasRow} style={{ marginBottom: 8 }}>
+              {inspectorBank.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  className={styles.aliasChip}
+                  style={inspectorId === candidate.id ? { borderColor: "var(--accent)" } : undefined}
+                  onClick={() => selectBankInspector(candidate.id, candidate.name)}
+                >
+                  {candidate.stampLocalFileId ? "✍️ " : ""}
+                  {candidate.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className={styles.inlineForm}>
             <input
-              placeholder="שם המפקח"
+              placeholder="שם המפקח (או בחר מהרשימה למעלה)"
               value={inspector}
-              onChange={(e) => setInspector(e.target.value)}
+              onChange={(e) => handleInspectorTyped(e.target.value)}
               aria-label="שם המפקח"
             />
           </div>
+          <p className={styles.emptyHint} style={{ margin: "4px 0 12px", fontSize: 12 }}>
+            <Link href="/inspectors">ניהול בנק מפקחים וחותמות ←</Link>
+          </p>
 
           <form onSubmit={handleAddParticipant} className={styles.inlineForm}>
             <input

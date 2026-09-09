@@ -54,7 +54,12 @@ export function HomeScreen() {
 
   return (
     <main className={styles.main}>
-      <h1 className={styles.title}>פרויקטים</h1>
+      <div className={styles.titleRow}>
+        <h1 className={styles.title}>פרויקטים</h1>
+        <Link href="/inspectors" className={styles.inspectorsLink}>
+          👤 עריכת מפקח
+        </Link>
+      </div>
 
       {activeInspection ? (
         <Link href={`/tour/${activeInspection.id}`} className={styles.recoveryBanner}>

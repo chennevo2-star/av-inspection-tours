@@ -7,6 +7,7 @@ import type {
   ContextEvent,
   Floor,
   Inspection,
+  Inspector,
   Issue,
   Note,
   Photo,
@@ -43,6 +44,8 @@ export class LocalDb extends Dexie {
   audio!: Table<Audio, string>;
   audioChunks!: Table<AudioChunk, string>;
   audioChunkBlobs!: Table<BlobRow, string>;
+  inspectors!: Table<Inspector, string>;
+  inspectorStampBlobs!: Table<BlobRow, string>;
   syncQueue!: Table<SyncQueueItem, string>;
 
   constructor() {
@@ -103,6 +106,29 @@ export class LocalDb extends Dexie {
       audio: "id, inspectionId, syncStatus",
       audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
       audioChunkBlobs: "id",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
+    // v4: Inspector "bank" (session's user request — a reusable list of supervisors with an embeddable
+    // stamp image for the closing page of a generated report). Local-only, no syncStatus/enqueueSync —
+    // see the Inspector type's own doc comment in shared-types for why.
+    this.version(4).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      inspectors: "id, name",
+      inspectorStampBlobs: "id",
       syncQueue: "id, entityType, entityId, createdAt",
     });
   }

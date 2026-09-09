@@ -113,6 +113,7 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     startTime: isoToDate(i.startTime),
     endTime: i.endTime ? isoToDate(i.endTime) : null,
     inspector: i.inspector,
+    inspectorId: i.inspectorId,
     participants: i.participants,
     status: i.status,
     aiStatus: i.aiStatus,

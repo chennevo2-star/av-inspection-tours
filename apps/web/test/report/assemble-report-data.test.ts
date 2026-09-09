@@ -5,6 +5,8 @@ import { createRoom } from "../../lib/db/rooms";
 import { startInspection, addParticipant } from "../../lib/db/inspections";
 import { createTask } from "../../lib/db/tasks";
 import { capturePhoto } from "../../lib/db/photos";
+import { createInspector, setInspectorStamp } from "../../lib/db/inspectors";
+import { getLocalDb } from "../../lib/db/local-db";
 import { assembleReportData } from "../../lib/report/assemble-report-data";
 import { resetLocalDb } from "../db/helpers";
 
@@ -28,6 +30,47 @@ describe("assembleReportData — real IndexedDB read-out into InspectionReportDa
     // loadLogo()'s "never throw, degrade to null" contract, just via a different failure path than the
     // real-browser 404 it'll hit today.
     expect(data.logo).toBeNull();
+    // No inspector was picked from the bank -- falls back to the plain typed name, no stamp.
+    expect(data.inspectorName).toBe("דני");
+    expect(data.inspectorStamp).toBeNull();
+  });
+
+  it("resolves a bank-picked inspector's name and real stamp bytes (session's user request)", async () => {
+    const project = await createProject("Biocatch");
+    const inspector = await createInspector("אבי לוי");
+    const stampBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9, 9]);
+    await setInspectorStamp(inspector.id, new Blob([stampBytes], { type: "image/png" }));
+    const inspection = await startInspection(project.id, "אבי לוי", [], inspector.id);
+
+    const data = await assembleReportData(inspection.id);
+
+    expect(data.inspectorName).toBe("אבי לוי");
+    expect(data.inspectorStamp).not.toBeNull();
+    expect(data.inspectorStamp?.mimeType).toBe("image/png");
+    expect(Array.from(data.inspectorStamp!.bytes)).toEqual(Array.from(stampBytes));
+  });
+
+  it("resolves a bank-picked inspector's name with a null stamp when none has been uploaded yet", async () => {
+    const project = await createProject("Biocatch");
+    const inspector = await createInspector("אבי לוי");
+    const inspection = await startInspection(project.id, "אבי לוי", [], inspector.id);
+
+    const data = await assembleReportData(inspection.id);
+
+    expect(data.inspectorName).toBe("אבי לוי");
+    expect(data.inspectorStamp).toBeNull();
+  });
+
+  it("falls back to the plain inspector name if the bank record was later deleted (doesn't throw)", async () => {
+    const project = await createProject("Biocatch");
+    const inspector = await createInspector("אבי לוי");
+    const inspection = await startInspection(project.id, "אבי לוי", [], inspector.id);
+    await getLocalDb().inspectors.delete(inspector.id);
+
+    const data = await assembleReportData(inspection.id);
+
+    expect(data.inspectorName).toBe("אבי לוי"); // falls back to Inspection.inspector itself
+    expect(data.inspectorStamp).toBeNull();
   });
 
   it("throws a clear error rather than silently producing a blank report for an unknown inspection", async () => {

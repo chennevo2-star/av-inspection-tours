@@ -117,6 +117,9 @@ export const inspections = pgTable("inspections", {
   startTime: timestamp("start_time", { withTimezone: true }).notNull(),
   endTime: timestamp("end_time", { withTimezone: true }),
   inspector: text("inspector").notNull(),
+  // No FK: the Inspector "bank" (packages/shared-types Inspector) is deliberately local-only for now
+  // (see its own doc comment) -- this is just a loose id, not a real referenced table server-side yet.
+  inspectorId: uuid("inspector_id"),
   participants: jsonb("participants").$type<string[]>().notNull().default([]),
   status: inspectionStatusEnum("status").notNull().default("בתהליך"),
   aiStatus: aiStatusEnum("ai_status").notNull().default("לא_רלוונטי"),

@@ -6,6 +6,9 @@ import type { InspectionReportData } from "../src/types.js";
 // Minimal but real JPEG magic bytes (SOI + APP0) — docx embeds raw bytes into the zip without decoding
 // them, so this is enough to prove real image embedding without needing a fully valid photo.
 const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+// Minimal but real PNG magic bytes -- a distinct signature from FAKE_JPEG so a test can tell the two
+// embedded images apart (the inspector stamp vs. a task photo) rather than just counting media files.
+const FAKE_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function sampleData(overrides: Partial<InspectionReportData> = {}): InspectionReportData {
   return {
@@ -40,6 +43,8 @@ function sampleData(overrides: Partial<InspectionReportData> = {}): InspectionRe
       },
     ],
     summaryText: "הסיור התנהל כשגרה. נותרו 2 משימות פתוחות מול סינמה.",
+    inspectorName: "דני כהן",
+    inspectorStamp: null,
     ...overrides,
   };
 }
@@ -118,6 +123,54 @@ describe("buildInspectionReportDocument — real OOXML output, not HTML-as-.docx
     const firstImage = await zip.file(mediaFiles[0]!)!.async("uint8array");
     // Byte-identical to what was handed in — not re-encoded/corrupted along the way.
     expect(Array.from(firstImage.subarray(0, 4))).toEqual([0xff, 0xd8, 0xff, 0xe0]);
+  });
+
+  it("embeds the inspector's stamp and name at the end of the report (session's user request — 'בנק חותמות של מפקחים')", async () => {
+    const data = sampleData({
+      inspectorName: "אבי לוי",
+      inspectorStamp: { bytes: FAKE_PNG, mimeType: "image/png" },
+    });
+    const doc = buildInspectionReportDocument(data);
+    const buffer = await packToBuffer(doc);
+
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+    expect(xml).toContain("אבי לוי");
+
+    // Two distinct embedded images now exist: the task photo (JPEG) and the inspector stamp (PNG).
+    const mediaFiles = Object.keys(zip.files).filter((name) => name.startsWith("word/media/") && !zip.files[name]!.dir);
+    const mediaBytes = await Promise.all(mediaFiles.map((name) => zip.file(name)!.async("uint8array")));
+    const hasJpeg = mediaBytes.some((bytes) => bytes[0] === 0xff && bytes[1] === 0xd8);
+    const hasPng = mediaBytes.some((bytes) => bytes[0] === 0x89 && bytes[1] === 0x50);
+    expect(hasJpeg).toBe(true);
+    expect(hasPng).toBe(true);
+
+    // The stamp's own bytes are embedded byte-identical, same guarantee as task photos.
+    const stampFile = mediaBytes.find((bytes) => bytes[0] === 0x89 && bytes[1] === 0x50);
+    expect(Array.from(stampFile!.subarray(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("prints just the inspector's name with no image when no stamp has been uploaded yet (no-mock-success: never fakes a stamp)", async () => {
+    const data = sampleData({ inspectorName: "אבי לוי", inspectorStamp: null });
+    const doc = buildInspectionReportDocument(data);
+    const buffer = await packToBuffer(doc);
+
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+    expect(xml).toContain("אבי לוי");
+
+    // Only the task photo is embedded -- no PNG (a stamp) anywhere.
+    const mediaFiles = Object.keys(zip.files).filter((name) => name.startsWith("word/media/") && !zip.files[name]!.dir);
+    const mediaBytes = await Promise.all(mediaFiles.map((name) => zip.file(name)!.async("uint8array")));
+    const hasPng = mediaBytes.some((bytes) => bytes[0] === 0x89 && bytes[1] === 0x50);
+    expect(hasPng).toBe(false);
+  });
+
+  it("prints neither a name nor an image when the tour had no bank-picked inspector at all", async () => {
+    const data = sampleData({ inspectorName: null, inspectorStamp: null });
+    const doc = buildInspectionReportDocument(data);
+    const buffer = await packToBuffer(doc); // must not throw
+    expect(buffer.length).toBeGreaterThan(500);
   });
 
   it("numbers task rows by their position in the array, not by the stored friendlyNumber (real bug: drag-reorder in the preview screen left the printed number stuck to the original task)", async () => {

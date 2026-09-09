@@ -32,6 +32,8 @@ function sampleData(): InspectionReportData {
     generalText: "בדיקת מסלול ה-API האמיתי מקצה לקצה.",
     tasks: [],
     summaryText: "בדיקה.",
+    inspectorName: null,
+    inspectorStamp: null,
   };
 }
 

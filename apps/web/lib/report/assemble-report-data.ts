@@ -2,6 +2,7 @@ import type { InspectionReportData, ReportPhoto, ReportTaskRow } from "@av-inspe
 import { getLocalDb } from "../db/local-db";
 import { listTasksForInspection } from "../db/tasks";
 import { getPhotoBlob } from "../db/photos";
+import { getInspector, getInspectorStampBlob } from "../db/inspectors";
 
 /** Fixed business fact, not per-project data — spec names this specific office. */
 const OFFICE_NAME = "ל.שחר";
@@ -34,6 +35,23 @@ async function blobToReportPhoto(blob: Blob): Promise<ReportPhoto> {
 }
 
 /**
+ * The tour's inspector's stamp, if they were picked from the bank AND have one uploaded (session's user
+ * request). Both are optional — an ad-hoc/free-text inspector name, or a bank inspector with no stamp
+ * yet, both correctly fall through to `{ name, stamp: null }` rather than failing the whole report.
+ */
+async function loadInspectorSignature(
+  inspectorId: string | null,
+  fallbackName: string
+): Promise<{ name: string | null; stamp: ReportPhoto | null }> {
+  if (!inspectorId) return { name: fallbackName || null, stamp: null };
+  const inspector = await getInspector(inspectorId);
+  if (!inspector) return { name: fallbackName || null, stamp: null }; // e.g. later deleted from the bank
+  if (!inspector.stampLocalFileId) return { name: inspector.name, stamp: null };
+  const blob = await getInspectorStampBlob(inspector.stampLocalFileId);
+  return { name: inspector.name, stamp: blob ? await blobToReportPhoto(blob) : null };
+}
+
+/**
  * Reads everything a report needs straight out of the local, offline-first IndexedDB (Inspection,
  * Project, Task, Floor, Room, Photo + blob bytes) and resolves it into the plain, already-denormalized
  * shape packages/report-generator expects. Runs entirely client-side — never depends on the sync
@@ -49,11 +67,12 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
   const project = await db.projects.get(inspection.projectId);
   if (!project) throw new Error(`assembleReportData: project ${inspection.projectId} not found locally`);
 
-  const [tasks, floors, rooms, logo] = await Promise.all([
+  const [tasks, floors, rooms, logo, signature] = await Promise.all([
     listTasksForInspection(inspectionId),
     db.floors.where("projectId").equals(project.id).toArray(),
     db.rooms.toArray(), // filtered down to the relevant ones via the floorId map below
     loadLogo(),
+    loadInspectorSignature(inspection.inspectorId, inspection.inspector),
   ]);
 
   const floorById = new Map(floors.map((f) => [f.id, f]));
@@ -103,5 +122,7 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
     generalText: "",
     tasks: taskRows,
     summaryText: "",
+    inspectorName: signature.name,
+    inspectorStamp: signature.stamp,
   };
 }

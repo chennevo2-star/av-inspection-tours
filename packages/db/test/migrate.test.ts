@@ -53,5 +53,5 @@ describe("runMigrations against PGlite", () => {
 
     // Re-running migrations must be a safe no-op, not an error on already-applied migrations.
     await expect(runMigrations()).resolves.not.toThrow();
-  });
+  }, 30_000); // runMigrations() runs twice here against real WASM Postgres; ~10s each is normal, not a hang.
 });

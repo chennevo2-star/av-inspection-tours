@@ -247,6 +247,39 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
     }),
   ];
 
+  // Inspector's stamp (session's user request — "בנק חותמות של מפקחים"), at the very end of the report.
+  // Prints correctly with just the name when no stamp has been embedded yet -- never fakes a stamp image
+  // that doesn't exist.
+  const signatureSection: Paragraph[] =
+    data.inspectorName || data.inspectorStamp
+      ? [
+          rtlParagraph({ alignment: AlignmentType.START, spacing: { before: 500 } }), // spacer line
+          ...(data.inspectorStamp
+            ? [
+                new Paragraph({
+                  alignment: AlignmentType.START,
+                  children: [
+                    new ImageRun({
+                      data: data.inspectorStamp.bytes,
+                      type: imageTypeFromMime(data.inspectorStamp.mimeType),
+                      transformation: { width: 130, height: 130 },
+                    }),
+                  ],
+                }),
+              ]
+            : []),
+          ...(data.inspectorName
+            ? [
+                rtlParagraph({
+                  alignment: AlignmentType.START,
+                  spacing: { before: 60 },
+                  children: [rtlRun(data.inspectorName, { bold: true, size: 20 })],
+                }),
+              ]
+            : []),
+        ]
+      : [];
+
   return new Document({
     sections: [
       {
@@ -266,7 +299,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
             ],
           }),
         },
-        children: [...coverChildren, ...generalSection, ...tasksSection, ...summarySection],
+        children: [...coverChildren, ...generalSection, ...tasksSection, ...summarySection, ...signatureSection],
       },
     ],
   });

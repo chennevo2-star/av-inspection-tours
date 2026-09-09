@@ -10,7 +10,8 @@ import { enqueueSync } from "../sync/enqueue";
 export async function startInspection(
   projectId: string,
   inspector: string,
-  participants: string[] = []
+  participants: string[] = [],
+  inspectorId: string | null = null
 ): Promise<Inspection> {
   const db = getLocalDb();
   const existingCount = await db.inspections.where("projectId").equals(projectId).count();
@@ -24,6 +25,7 @@ export async function startInspection(
     startTime: now.toISOString(),
     endTime: null,
     inspector,
+    inspectorId,
     participants,
     status: "בתהליך",
     syncStatus: "LOCAL_ONLY",

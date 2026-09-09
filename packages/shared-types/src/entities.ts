@@ -136,6 +136,25 @@ export const ContractorAlias = z.object({
 export type ContractorAlias = z.infer<typeof ContractorAlias>;
 
 /* ------------------------------------------------------------------------------------------------
+ * Inspector (session's user request — a reusable "bank" of supervisors/inspectors, each with an
+ * embeddable stamp image that appears on a generated report's closing page). Cross-project (like the
+ * office itself, an inspector works across many projects, not just one) — the only entity in this app
+ * that isn't scoped to a Project. Deliberately local-only for now (no SyncEntityType/server table): the
+ * report pipeline that consumes it already runs fully offline from local IndexedDB, so cloud sync of the
+ * bank itself isn't required for the feature to be real and working — extendable later without changing
+ * this shape. `Inspection.inspectorId` below is still a real synced field (see entities.ts's own
+ * Inspection def) even though the Inspector record it points at doesn't sync itself.
+ * ---------------------------------------------------------------------------------------------- */
+
+export const Inspector = z.object({
+  id: uuid(),
+  name: z.string().min(1),
+  stampLocalFileId: z.string().nullable().default(null), // Dexie blob-table key; null until a stamp is uploaded
+  createdAt: isoDateTime().default(() => new Date().toISOString()),
+});
+export type Inspector = z.infer<typeof Inspector>;
+
+/* ------------------------------------------------------------------------------------------------
  * Inspection (spec §Inspection)
  * ---------------------------------------------------------------------------------------------- */
 
@@ -147,6 +166,11 @@ export const Inspection = z.object({
   startTime: isoDateTime(),
   endTime: isoDateTime().nullable().default(null), // null while the tour is in progress — drives Recovery (spec §44)
   inspector: z.string().min(1),
+  /** Which Inspector-bank record this tour's inspector was picked from, if any (session's user request)
+   * — null for an ad-hoc name typed free-text, or for tours predating this feature. This is what the
+   * report screen uses to look up a stamp image; `inspector` above stays the plain display name either
+   * way, so every existing read site keeps working unchanged. */
+  inspectorId: uuid().nullable().default(null),
   participants: z.array(z.string()).default([]),
   status: InspectionStatus.default("בתהליך"),
   syncStatus: SyncStatus.default("LOCAL_ONLY"),

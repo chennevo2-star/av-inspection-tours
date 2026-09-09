@@ -47,6 +47,8 @@ function sampleData(): InspectionReportData {
       },
     ],
     summaryText: "הסיור התנהל כשגרה.",
+    inspectorName: "דני כהן",
+    inspectorStamp: null,
   };
 }
 

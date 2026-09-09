@@ -85,6 +85,10 @@ describe("runAiPipelineForInspection (real PGlite + real local-fs storage, fake 
   beforeEach(async () => {
     const { runMigrations, getDb, projects, floors, rooms, contractors, contractorAliases, tasks, inspections, photos, audioChunks, audio } =
       await import("@av-inspection/db");
+    // Real migrations now take ~10s against a fresh PGlite instance (WASM Postgres, genuinely slower
+    // than native, and there are more migrations to apply as the schema has grown) -- right at vitest's
+    // 10s default hook timeout, so this occasionally times out for real even though nothing is actually
+    // hung (confirmed by timing runMigrations() directly: it completes, just slowly). Generous headroom.
     const { getStorage } = await import("@av-inspection/storage");
     await runMigrations();
     const db = getDb();
@@ -161,7 +165,7 @@ describe("runAiPipelineForInspection (real PGlite + real local-fs storage, fake 
         cloudFileId: "audio-chunks/chunk0.webm",
       },
     ]);
-  });
+  }, 30_000);
 
   it("runs the full pipeline: transcribes chunks in order, builds correct reference data, persists a completed Draft", async () => {
     const { runAiPipelineForInspection } = await import("../src/orchestrator.js");
