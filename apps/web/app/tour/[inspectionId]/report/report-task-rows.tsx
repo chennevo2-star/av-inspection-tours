@@ -106,7 +106,7 @@ export function ReportTaskRows({
     <>
       <p className={styles.reorderHint}>לחיצה ארוכה על ⠿ מזיזה שורה. לחיצה על ⭘ בוחרת שורה למחיקה.</p>
       <ul className={styles.taskList}>
-        {tasks.map((task) => (
+        {tasks.map((task, index) => (
           <li
             key={task.id}
             ref={(el) => {
@@ -133,7 +133,12 @@ export function ReportTaskRows({
               >
                 ⠿
               </button>
-              <span className={styles.taskNumber}>#{task.friendlyNumber ?? "—"}</span>
+              {/* Position in the (possibly reordered) list, not the stored friendlyNumber -- a real bug
+                  found here: dragging a row used to leave its printed "#N" stuck to the original task
+                  instead of following it to its new spot, so the numbers stopped reading sequentially
+                  top-to-bottom after any reorder. The DOCX/PDF table numbers the same way (build-docx.ts),
+                  so the exported document always matches exactly what was shown here. */}
+              <span className={styles.taskNumber}>#{index + 1}</span>
               <span className={styles.cardTopSpacer} />
               {selectedId === task.id ? (
                 <button type="button" className={styles.trashButton} aria-label="מחק שורה" onClick={() => handleDelete(task.id)}>

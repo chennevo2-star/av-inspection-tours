@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { SyncQueue } from "@av-inspection/sync-engine";
-import type { SyncQueueItem, SendResult } from "@av-inspection/sync-engine";
+import type { SendResult } from "@av-inspection/sync-engine";
+import type { SyncQueueItem } from "@av-inspection/shared-types";
 import { createProject } from "../../lib/db/projects";
 import { createFloor } from "../../lib/db/floors";
 import { getLocalDb } from "../../lib/db/local-db";

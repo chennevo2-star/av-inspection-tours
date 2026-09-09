@@ -61,7 +61,7 @@ function bodyCell(children: Paragraph[], widthPercent: number): TableCell {
 }
 
 function textCell(text: string, widthPercent: number): TableCell {
-  return bodyCell([rtlParagraph({ alignment: AlignmentType.RIGHT, children: [rtlRun(text || "—", { size: 20 })] })], widthPercent);
+  return bodyCell([rtlParagraph({ alignment: AlignmentType.START, children: [rtlRun(text || "—", { size: 20 })] })], widthPercent);
 }
 
 // Narrowed to just the two variants this file ever produces (never "svg") — IImageOptions is a
@@ -112,10 +112,13 @@ function buildTaskTable(tasks: ReportTaskRow[]): Table {
   });
 
   const rows = tasks.map(
-    (task) =>
+    (task, index) =>
+      // Numbered by position in `tasks` (the order the caller wants printed), not `friendlyNumber` --
+      // that array order is exactly what the report-preview screen's drag-reorder produces, so the
+      // printed number always matches what the reviewer saw on screen, even after reordering.
       new TableRow({
         children: [
-          textCell(task.friendlyNumber !== null ? String(task.friendlyNumber) : "—", TASK_COLUMN_WIDTHS.number),
+          textCell(String(index + 1), TASK_COLUMN_WIDTHS.number),
           textCell(task.floorName ?? "—", TASK_COLUMN_WIDTHS.floor),
           textCell(task.roomName ?? "—", TASK_COLUMN_WIDTHS.room),
           textCell(task.description, TASK_COLUMN_WIDTHS.description),
@@ -195,7 +198,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
   for (const [label, value] of metaLines) {
     coverChildren.push(
       rtlParagraph({
-        alignment: AlignmentType.RIGHT,
+        alignment: AlignmentType.START,
         spacing: { after: 60 },
         children: [rtlRun(`${label}: `, { bold: true, size: 22 }), rtlRun(value, { size: 22 })],
       })
@@ -205,7 +208,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
   const generalSection = [
     rtlParagraph({
       heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.RIGHT,
+      alignment: AlignmentType.START,
       spacing: { before: 400, after: 150 },
       children: [rtlRun("כללי", { bold: true })],
     }),
@@ -215,25 +218,25 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
   const tasksSection = [
     rtlParagraph({
       heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.RIGHT,
+      alignment: AlignmentType.START,
       spacing: { before: 400, after: 150 },
       children: [rtlRun("משימות וליקויים", { bold: true })],
     }),
     data.tasks.length > 0
       ? buildTaskTable(data.tasks)
-      : rtlParagraph({ alignment: AlignmentType.RIGHT, children: [rtlRun("לא נרשמו משימות בסיור זה.")] }),
+      : rtlParagraph({ alignment: AlignmentType.START, children: [rtlRun("לא נרשמו משימות בסיור זה.")] }),
   ];
 
   const summarySection = [
     rtlParagraph({
       heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.RIGHT,
+      alignment: AlignmentType.START,
       spacing: { before: 400, after: 150 },
       children: [rtlRun("סיכום", { bold: true })],
     }),
     ...splitParagraphs(data.summaryText || "לא הוזן סיכום."),
     rtlParagraph({
-      alignment: AlignmentType.RIGHT,
+      alignment: AlignmentType.START,
       spacing: { before: 300 },
       children: [
         rtlRun(
@@ -250,7 +253,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
         properties: {},
         headers: {
           default: new Header({
-            children: [rtlParagraph({ alignment: AlignmentType.LEFT, children: [rtlRun(data.officeName, { size: 16, color: "9CA3AF" })] })],
+            children: [rtlParagraph({ alignment: AlignmentType.END, children: [rtlRun(data.officeName, { size: 16, color: "9CA3AF" })] })],
           }),
         },
         footers: {
@@ -272,7 +275,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
 function splitParagraphs(text: string): Paragraph[] {
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length === 0) {
-    return [rtlParagraph({ alignment: AlignmentType.RIGHT, children: [rtlRun("")] })];
+    return [rtlParagraph({ alignment: AlignmentType.START, children: [rtlRun("")] })];
   }
-  return lines.map((line) => rtlParagraph({ alignment: AlignmentType.RIGHT, spacing: { after: 100 }, children: [rtlRun(line)] }));
+  return lines.map((line) => rtlParagraph({ alignment: AlignmentType.START, spacing: { after: 100 }, children: [rtlRun(line)] }));
 }

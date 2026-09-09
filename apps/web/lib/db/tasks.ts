@@ -45,14 +45,15 @@ export async function listOpenTasks(projectId: string): Promise<Task[]> {
 }
 
 /**
- * Every task created during one specific tour, most-recently-created first (the "טבלת משימות" screen).
- * Sorted by `friendlyNumber` (a real monotonic per-project counter), not `timestamp` — the same class of
- * bug already hit once with ContextEvent applies here too: two tasks created in quick succession could
- * land on the same millisecond, making timestamp-only ordering unstable.
+ * Every task created during one specific tour, in creation order (first task added first — the "טבלת
+ * משימות" screen; user-requested direction, matches reading a numbered list top to bottom). Sorted by
+ * `friendlyNumber` (a real monotonic per-project counter), not `timestamp` — the same class of bug
+ * already hit once with ContextEvent applies here too: two tasks created in quick succession could land
+ * on the same millisecond, making timestamp-only ordering unstable.
  */
 export async function listTasksForInspection(inspectionId: string): Promise<Task[]> {
   const tasks = await getLocalDb().tasks.where("createdInspectionId").equals(inspectionId).toArray();
-  return tasks.sort((a, b) => (b.friendlyNumber ?? 0) - (a.friendlyNumber ?? 0));
+  return tasks.sort((a, b) => (a.friendlyNumber ?? 0) - (b.friendlyNumber ?? 0));
 }
 
 /** Closes a previously-open task from the current inspection (spec §27 — "סגור משימה #14"). */

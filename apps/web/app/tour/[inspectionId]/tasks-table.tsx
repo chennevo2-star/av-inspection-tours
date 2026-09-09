@@ -8,9 +8,10 @@ import { listTasksForInspection } from "../../../lib/db/tasks";
 import { getPhotoBlob } from "../../../lib/db/photos";
 import styles from "./tasks-table.module.css";
 
-/** "טבלת משימות" — every task from this tour, most recently added first, with its photos (this
- * session's user request). A full-screen overlay like the wizard, not a separate route, so it can be
- * opened/closed instantly without losing the main tour screen's state. */
+/** "טבלת משימות" — every task from this tour, first-added first, with its photos (this session's user
+ * request — flipped from an earlier most-recent-first ordering per direct feedback). A full-screen
+ * overlay like the wizard, not a separate route, so it can be opened/closed instantly without losing the
+ * main tour screen's state. */
 export function TasksTable({ inspectionId, onClose }: { inspectionId: string; onClose: () => void }) {
   const tasks = useLiveQuery(() => listTasksForInspection(inspectionId), [inspectionId]);
   const floors = useLiveQuery(() => getLocalDb().floors.toArray(), []);

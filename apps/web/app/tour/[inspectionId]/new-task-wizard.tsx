@@ -179,7 +179,7 @@ export function NewTaskWizard({
 
       <footer className={styles.footer}>
         <button className={styles.secondaryButton} onClick={goPrev}>
-          {step === 1 ? "ביטול" : "← הקודם"}
+          {step === 1 ? "ביטול" : "→ הקודם"}
         </button>
         <button className={styles.primaryButton} onClick={goNext} disabled={submitting}>
           {step === 4 ? (submitting ? "שומר…" : "✓ אשר משימה") : "הבא ←"}

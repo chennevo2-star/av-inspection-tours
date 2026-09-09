@@ -86,7 +86,7 @@ describe("Task (spec §10 ✅ משימה, §27 close-not-duplicate)", () => {
     expect(task.roomId).toBe(ROOM);
   });
 
-  it("listTasksForInspection returns most-recently-created first", async () => {
+  it("listTasksForInspection returns tasks in creation order (first-created first — user-requested reading order)", async () => {
     const inspection = await startInspection(PROJECT, "דני");
     const first = await createTask({ projectId: PROJECT, inspectionId: inspection.id, description: "משימה 1" });
     const second = await createTask({ projectId: PROJECT, inspectionId: inspection.id, description: "משימה 2" });
@@ -94,7 +94,7 @@ describe("Task (spec §10 ✅ משימה, §27 close-not-duplicate)", () => {
 
     const listed = await listTasksForInspection(inspection.id);
 
-    expect(listed.map((t) => t.id)).toEqual([third.id, second.id, first.id]);
+    expect(listed.map((t) => t.id)).toEqual([first.id, second.id, third.id]);
   });
 
   it("closeTask closes a task from a later inspection and records which one closed it", async () => {
