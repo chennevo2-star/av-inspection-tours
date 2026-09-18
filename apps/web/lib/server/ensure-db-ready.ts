@@ -23,11 +23,30 @@ async function bridgeHyperdriveConnectionString(): Promise<void> {
     const { env } = getCloudflareContext();
     const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
     if (hyperdrive?.connectionString) {
-      process.env.DATABASE_URL = hyperdrive.connectionString;
+      process.env.DATABASE_URL = stripTlsParamsForHyperdrive(hyperdrive.connectionString);
     }
   } catch {
     // Not running under the OpenNext/Workers adapter (Container or local dev) -- expected, not an error.
   }
+}
+
+/**
+ * Going back to basics after real, live trial and error against the deployed Worker (see this repo's git
+ * log for the two dead ends this ruled out): Cloudflare's own official minimal postgres.js + Hyperdrive
+ * example passes the binding's connectionString straight through with no ssl override and no custom
+ * socket at all, which only makes sense if that string is meant to need no application-level TLS from the
+ * Worker's side in the first place -- Hyperdrive's own hop to the real Neon database is already secured on
+ * Cloudflare's network, so the Worker-to-Hyperdrive leg needs none on top of that. Stripping
+ * `sslmode`/`channel_binding` here (Hyperdrive-bridge-only -- the Container/direct-to-Neon path is
+ * untouched and keeps needing real TLS over the public internet) makes postgres.js default to `ssl: false`
+ * and use its default `net.Socket()`, matching that official example exactly instead of any custom
+ * TLS/socket wiring.
+ */
+function stripTlsParamsForHyperdrive(connectionString: string): string {
+  const url = new URL(connectionString);
+  url.searchParams.delete("sslmode");
+  url.searchParams.delete("channel_binding");
+  return url.toString();
 }
 
 /**

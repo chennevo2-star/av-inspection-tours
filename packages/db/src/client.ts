@@ -36,55 +36,12 @@ type DbHandle =
 
 let _handle: DbHandle | null = null;
 
-/**
- * Real bug hit here (confirmed live via `wrangler tail` against the deployed Worker, across several
- * attempts): postgres.js's own `net.Socket()` + `tls.connect()` connection path -- reached through
- * workerd's `node:net`/`node:tls` compat shim on the Cloudflare Workers/Hyperdrive deploy path
- * (apps/web/wrangler.jsonc) -- never actually gets intercepted/routed by Hyperdrive at all, no matter what
- * `ssl` option is passed (`ssl: 'require'` crashes on the unsupported `rejectUnauthorized` option; `ssl:
- * false` and `ssl: {}` both just hang until Workers force-kills the request as "hung and would never
- * generate a response"). Hyperdrive's real interception only engages for connections made through Workers'
- * own native TCP API (`cloudflare:sockets`), which this driver doesn't use by default -- postgres.js does
- * support supplying a custom per-connection socket factory for exactly this kind of runtime (its own
- * `options.socket`), so this detects the Workers runtime the same way postgres.js's own code already does
- * internally (`globalThis.Cloudflare`, see its index.js pool-size default) and wires that up.
- *
- * `cloudflare:sockets` isn't a real npm package or Node builtin -- it only exists as a workerd runtime
- * built-in, and a plain `import("cloudflare:sockets")` broke the build TWICE, in two different bundlers:
- * Next's own webpack build failed outright ("Module not found") until marked external, and then OpenNext's
- * OWN separate esbuild re-bundle pass (no exposed config for its own externals) failed the exact same way
- * regardless. A first attempt at hiding the specifier via `new Function("specifier", "return
- * import(specifier)")` fixed both build failures but broke at actual runtime instead -- confirmed live via
- * `wrangler tail`: `EvalError: Code generation from strings disallowed for this context`, a hard workerd
- * sandboxing restriction (no `eval`/`Function` constructor at all, regardless of CSP-style config). Moving
- * the specifier into a `string`-WIDENED variable (not `new Function`) sidesteps both problems without any
- * dynamic code generation: neither bundler's `import()` static-analysis triggers on a plain identifier
- * (only on literal strings), so it's left as genuine runtime code, needing no bundler config in either
- * stage -- and it's ordinary `import()`, not `eval`, so it's unaffected by workerd's sandboxing.
- */
-const cloudflareSocketsSpecifier: string = "cloudflare:sockets";
-
-async function createWorkersSocket(options: { host: string; port: number }) {
-  const { connect } = (await import(cloudflareSocketsSpecifier)) as {
-    connect: (address: { hostname: string; port: number }) => unknown;
-  };
-  return connect({ hostname: options.host, port: options.port });
-}
-
 function getHandle(): DbHandle {
   if (_handle) return _handle;
 
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) {
-    const isWorkersRuntime = typeof (globalThis as { Cloudflare?: unknown }).Cloudflare !== "undefined";
-    // postgres.js's own TS types don't declare `socket` at all, even though its real JS implementation
-    // (connection.js) supports it -- widening the type here (rather than casting the object literal
-    // itself) is what keeps TS's excess-property check from rejecting it.
-    const options: postgres.Options<Record<string, never>> & { socket?: typeof createWorkersSocket } = {
-      ssl: {},
-    };
-    if (isWorkersRuntime) options.socket = createWorkersSocket;
-    const client = postgres(connectionString, options);
+    const client = postgres(connectionString);
     _handle = { driver: "postgres", db: drizzlePg(client, { schema }) };
     return _handle;
   }
