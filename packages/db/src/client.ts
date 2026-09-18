@@ -41,7 +41,22 @@ function getHandle(): DbHandle {
 
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) {
-    const client = postgres(connectionString);
+    const client = postgres(connectionString, {
+      // Real bug hit here (confirmed live via `wrangler tail` against the deployed Worker): a bare
+      // `sslmode=require`/`prefer`/`allow` connection string makes postgres.js set
+      // `{ rejectUnauthorized: false }` before calling `tls.connect()` -- but workerd's `node:tls` compat
+      // shim (the Cloudflare Workers/Hyperdrive deploy path, apps/web/wrangler.jsonc) doesn't implement
+      // that option at all, throwing `ERR_OPTION_NOT_IMPLEMENTED` and hanging the request. Passing a plain
+      // object here takes postgres.js's OTHER branch (`Object.assign(options, ssl)` in its connection.js,
+      // not the string one) -- it still does the full SSL negotiation (unlike `ssl: false`, which skips
+      // the TLS handshake entirely and, tried first, broke Hyperdrive's own connection interception,
+      // turning the fast error into a silent hang instead) but never sets the unsupported field. Safe for
+      // the Container/direct-to-Neon path too: Node's own `tls.connect()` then just falls back to its
+      // default `rejectUnauthorized: true`, i.e. real certificate verification against Neon's
+      // publicly-trusted cert -- strictly safer than the `false` the connection string's `sslmode=require`
+      // implied, and confirmed unrelated to which driver mode (postgres vs PGlite) is active.
+      ssl: {},
+    });
     _handle = { driver: "postgres", db: drizzlePg(client, { schema }) };
     return _handle;
   }

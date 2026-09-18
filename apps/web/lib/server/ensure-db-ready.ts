@@ -23,30 +23,11 @@ async function bridgeHyperdriveConnectionString(): Promise<void> {
     const { env } = getCloudflareContext();
     const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
     if (hyperdrive?.connectionString) {
-      process.env.DATABASE_URL = stripTlsParamsForHyperdrive(hyperdrive.connectionString);
+      process.env.DATABASE_URL = hyperdrive.connectionString;
     }
   } catch {
     // Not running under the OpenNext/Workers adapter (Container or local dev) -- expected, not an error.
   }
-}
-
-/**
- * Hyperdrive's own hop to the real Neon database is already secured on Cloudflare's network -- the
- * Worker-to-Hyperdrive leg needs no application-level TLS on top of that, and real bug hit here confirms
- * it can't have one anyway: Neon's connection string carries `sslmode=require`, which `postgres` (the
- * driver packages/db uses) turns into `{ rejectUnauthorized: false }` before calling Workers' `tls.connect()`
- * -- but workerd's `node:tls` compat shim doesn't implement that option at all (any value), throwing
- * `ERR_OPTION_NOT_IMPLEMENTED`, which then cascades into a connection timeout since the handshake never
- * completes (confirmed live via `wrangler tail` against the real deployed Worker). Stripping `sslmode`/
- * `channel_binding` here (Hyperdrive-bridge-only -- the Container/direct-to-Neon path keeps needing real
- * TLS over the public internet, untouched) makes `postgres` default to `ssl: false` and skip that whole
- * code path, matching Cloudflare's own documented Hyperdrive + postgres.js integration.
- */
-function stripTlsParamsForHyperdrive(connectionString: string): string {
-  const url = new URL(connectionString);
-  url.searchParams.delete("sslmode");
-  url.searchParams.delete("channel_binding");
-  return url.toString();
 }
 
 /**
