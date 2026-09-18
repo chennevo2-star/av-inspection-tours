@@ -33,7 +33,7 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
   const mounted = useMounted();
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [data, setData] = useState<InspectionReportData | null>(null);
-  const [exporting, setExporting] = useState<"docx" | "pdf" | null>(null);
+  const [exporting, setExporting] = useState<"docx" | "pdf" | "xlsx" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
 
@@ -90,32 +90,56 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
     setData((current) => current && { ...current, tasks: current.tasks.filter((t) => t.id !== id) });
   }
 
-  async function handleExport(format: "docx" | "pdf") {
+  async function handleExport(format: "docx" | "pdf" | "xlsx") {
     if (!data) return;
     setExporting(format);
     setExportError(null);
     setExportSuccess(null);
     try {
-      const doc = buildInspectionReportDocument(data);
-      const docxBlob = await packToBlob(doc);
-
       if (format === "docx") {
+        const docxBlob = await packToBlob(buildInspectionReportDocument(data));
         const result = await saveGeneratedFile(docxBlob, reportFileName(data, "docx"), DOCX_MIME, "docx");
         if (result.method !== "cancelled") setExportSuccess(successMessage(result.method));
         return;
       }
 
-      const res = await fetch("/api/report/docx-to-pdf", {
+      if (format === "pdf") {
+        // JSON InspectionReportData body (not raw DOCX bytes) -- this is what actually gets the pure-JS
+        // engine by default (build-pdf.ts, no LibreOffice/Office install needed on the server); the route
+        // still accepts raw DOCX bytes too, but only to keep an older caller shape working, and that path
+        // is LibreOffice-only unconditionally (see the route's own comment) -- sending JSON is what makes
+        // this button actually benefit from the new engine instead of silently keeping the old one.
+        const res = await fetch("/api/report/docx-to-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error || `שגיאה ביצירת PDF (קוד ${res.status}).`);
+        }
+        const pdfBlob = await res.blob();
+        const result = await saveGeneratedFile(pdfBlob, reportFileName(data, "pdf"), "application/pdf", "pdf");
+        if (result.method !== "cancelled") setExportSuccess(successMessage(result.method));
+        return;
+      }
+
+      const res = await fetch("/api/report/xlsx", {
         method: "POST",
-        headers: { "Content-Type": DOCX_MIME },
-        body: docxBlob,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || `שגיאה בהמרת PDF (קוד ${res.status}).`);
+        throw new Error(body?.error || `שגיאה ביצירת Excel (קוד ${res.status}).`);
       }
-      const pdfBlob = await res.blob();
-      const result = await saveGeneratedFile(pdfBlob, reportFileName(data, "pdf"), "application/pdf", "pdf");
+      const xlsxBlob = await res.blob();
+      const result = await saveGeneratedFile(
+        xlsxBlob,
+        reportFileName(data, "xlsx"),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsx"
+      );
       if (result.method !== "cancelled") setExportSuccess(successMessage(result.method));
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "שגיאה לא צפויה בייצוא הדו״ח.");
@@ -192,7 +216,15 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
             disabled={exporting !== null}
             onClick={() => void handleExport("pdf")}
           >
-            {exporting === "pdf" ? "ממיר…" : "📑 ייצוא כ-PDF"}
+            {exporting === "pdf" ? "יוצר…" : "📑 ייצוא כ-PDF"}
+          </button>
+          <button
+            type="button"
+            className={`${styles.exportButton} ${styles.exportButtonSecondary}`}
+            disabled={exporting !== null}
+            onClick={() => void handleExport("xlsx")}
+          >
+            {exporting === "xlsx" ? "יוצר…" : "📊 ייצוא כ-Excel"}
           </button>
         </div>
         {exportSuccess ? <p className={`${styles.exportStatus} ${styles.exportStatusSuccess}`}>{exportSuccess}</p> : null}

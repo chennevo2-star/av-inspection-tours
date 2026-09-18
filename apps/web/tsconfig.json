@@ -21,6 +21,10 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      // Same real resolution gap as packages/report-generator/tsconfig.json -- see its own comment.
+      "@cantoo/pdf-lib": [
+        "../../node_modules/@cantoo/pdf-lib/cjs/index.d.ts"
       ]
     },
     "allowJs": true

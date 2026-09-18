@@ -9,11 +9,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "docx": "^9.0.2"
+    "docx": "^9.0.2",
+    "@cantoo/pdf-lib": "^2.11.1",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "bidi-js": "^1.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
     "@types/node": "^20.14.0",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "unpdf": "^1.8.1",
+    "@embedpdf/fonts-hebrew": "^1.0.0"
   }
 }

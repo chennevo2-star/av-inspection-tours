@@ -1,7 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    // @cantoo/pdf-lib genuinely ships real types (node_modules/@cantoo/pdf-lib/cjs/index.d.ts) but
+    // TS's "moduleResolution": "bundler" fails to resolve them via its own package.json "exports" map
+    // (a real, reproducible resolution gap -- not a missing-types problem, since the file demonstrably
+    // exists on disk). Pointing `paths` straight at the real file sidesteps the broken resolution while
+    // keeping full, real type-checking (not an `any`-typed ambient-module shim, which would have been
+    // the alternative but throws away all the type safety this package actually provides).
+    "paths": {
+      "@cantoo/pdf-lib": ["../../node_modules/@cantoo/pdf-lib/cjs/index.d.ts"]
+    }
   },
   "include": ["src", "test"]
 }

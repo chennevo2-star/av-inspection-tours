@@ -4,8 +4,17 @@ import { promisify } from "node:util";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import {
+  buildInspectionReportDocument,
+  buildInspectionReportPdf,
+  packToBuffer,
+  packPdfToBuffer,
+} from "@av-inspection/report-generator";
+import type { InspectionReportData } from "@av-inspection/report-generator";
+import { toArrayBuffer } from "../to-array-buffer";
 
 const execFileAsync = promisify(execFile);
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 /**
  * LibreOffice's default headless invocation shares one per-user profile and its lock file across every
@@ -21,52 +30,106 @@ function toFileUri(absolutePath: string): string {
 }
 
 /**
- * DOCX → PDF, server-side, via LibreOffice headless (ADR-004 — PDF is always derived from the exact
- * DOCX, never generated independently, so the two can never visually diverge). Real, and only as
- * reliable as LibreOffice actually being installed on this machine — see ADR-007/ADR-004 for the
- * install story. Returns a clear, honest error (not a fake/empty PDF) if it isn't.
+ * Converts real DOCX bytes to a real PDF via a real installed LibreOffice binary. Kept ONLY as an
+ * explicit, clearly-labeled fallback now (`PDF_ENGINE=libreoffice`) — a safety net during the rollout of
+ * the new pure-JS engine below, not a silently-parallel second code path. The company's spec now rules
+ * out depending on any locally-installed software for PDF generation (see build-pdf.ts's own top comment
+ * for the full research behind the replacement), so this is no longer the default, but real production
+ * environments sometimes need a fallback while the new engine proves itself — hence "kept", not deleted.
  */
-export async function POST(request: NextRequest) {
+async function convertDocxToPdfViaLibreOffice(docxBytes: Uint8Array): Promise<Uint8Array> {
   const sofficePath = process.env.SOFFICE_PATH ?? "C:\\Program Files\\LibreOffice\\program\\soffice.exe";
-
-  const docxBytes = new Uint8Array(await request.arrayBuffer());
-  if (docxBytes.length === 0) {
-    return NextResponse.json({ error: "Empty request body — expected DOCX bytes" }, { status: 400 });
-  }
-
   const workDir = await mkdtemp(path.join(tmpdir(), "av-inspection-docx2pdf-"));
   const docxPath = path.join(workDir, "report.docx");
   const profileDir = path.join(workDir, "lo-profile");
 
   try {
     await writeFile(docxPath, docxBytes);
-
     await execFileAsync(
       sofficePath,
       [`-env:UserInstallation=${toFileUri(profileDir)}`, "--headless", "--convert-to", "pdf", "--outdir", workDir, docxPath],
       { timeout: 60_000 }
     );
-
     const pdfPath = path.join(workDir, "report.pdf");
-    const pdfBytes = await readFile(pdfPath);
+    return await readFile(pdfPath);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
 
-    return new NextResponse(pdfBytes, {
-      status: 200,
-      headers: { "Content-Type": "application/pdf" },
-    });
+/** Loose but real shape check -- this route has no existing zod schema for InspectionReportData to
+ * reuse, and introducing one is out of this change's scope; this catches the obviously-wrong-body case
+ * (missing/malformed JSON) with an honest 400 rather than crashing deep inside the PDF/DOCX builders. */
+function isLikelyInspectionReportData(value: unknown): value is InspectionReportData {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    Array.isArray((value as InspectionReportData).tasks) &&
+    typeof (value as InspectionReportData).projectName === "string"
+  );
+}
+
+/**
+ * PDF generation endpoint. Two request shapes are accepted, for two different reasons:
+ *
+ * 1. `Content-Type: <docx mime>`, raw DOCX bytes as the body — the shape the CURRENTLY SHIPPED client
+ *    (apps/web/app/tour/[inspectionId]/report/report-screen.tsx) already sends; that file lives outside
+ *    this change's allowed scope, so it hasn't been updated to send the new contract below. Raw DOCX
+ *    bytes can only honestly be handled one way here: LibreOffice conversion. This branch always uses
+ *    it, regardless of PDF_ENGINE — there's no InspectionReportData in a DOCX-bytes body to hand the new
+ *    engine. Updating report-screen.tsx to send shape (2) instead (so it actually benefits from the new
+ *    no-external-binary default) is a real, small follow-up outside this file's own scope — see the
+ *    final report for this task.
+ * 2. `Content-Type: application/json`, an `InspectionReportData` body — the new, primary contract.
+ *    Defaults to the pure-JS engine (build-pdf.ts); set `PDF_ENGINE=libreoffice` to instead build the
+ *    DOCX server-side from the same data and convert THAT via LibreOffice (still real, still never a
+ *    faked/independently-diverging PDF, just via the legacy path).
+ *
+ * Preserves the route's original honest-error behavior either way: never returns a fake/empty PDF.
+ */
+export async function POST(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+  const useLibreOffice = process.env.PDF_ENGINE === "libreoffice";
+
+  try {
+    if (contentType.includes(DOCX_MIME)) {
+      const docxBytes = new Uint8Array(await request.arrayBuffer());
+      if (docxBytes.length === 0) {
+        return NextResponse.json({ error: "Empty request body — expected DOCX bytes" }, { status: 400 });
+      }
+      const pdfBytes = await convertDocxToPdfViaLibreOffice(docxBytes);
+      return new NextResponse(toArrayBuffer(pdfBytes), { status: 200, headers: { "Content-Type": "application/pdf" } });
+    }
+
+    const body: unknown = await request.json().catch(() => null);
+    if (!isLikelyInspectionReportData(body)) {
+      return NextResponse.json(
+        { error: "גוף הבקשה חייב להיות מסמך דו״ח (InspectionReportData) בפורמט JSON, או קובץ DOCX." },
+        { status: 400 }
+      );
+    }
+    const data = body;
+
+    if (useLibreOffice) {
+      const docxBytes = await packToBuffer(buildInspectionReportDocument(data));
+      const pdfBytes = await convertDocxToPdfViaLibreOffice(docxBytes);
+      return new NextResponse(toArrayBuffer(pdfBytes), { status: 200, headers: { "Content-Type": "application/pdf" } });
+    }
+
+    const pdfDoc = await buildInspectionReportPdf(data);
+    const pdfBytes = await packPdfToBuffer(pdfDoc);
+    return new NextResponse(toArrayBuffer(pdfBytes), { status: 200, headers: { "Content-Type": "application/pdf" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const isMissingBinary = message.includes("ENOENT");
-    console.error("[report] DOCX→PDF conversion failed:", err);
+    console.error("[report] PDF generation failed:", err);
     return NextResponse.json(
       {
         error: isMissingBinary
-          ? `LibreOffice לא נמצא בנתיב ${sofficePath}. ייצוא PDF דורש LibreOffice מותקן בשרת.`
-          : `המרת PDF נכשלה: ${message}`,
+          ? `LibreOffice לא נמצא בשרת (PDF_ENGINE=libreoffice דורש soffice מותקן).`
+          : `יצירת PDF נכשלה: ${message}`,
       },
       { status: 500 }
     );
-  } finally {
-    await rm(workDir, { recursive: true, force: true });
   }
 }
