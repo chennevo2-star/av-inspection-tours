@@ -33,3 +33,5 @@ new_sqlite_classes = ["AvInspectionContainer"]
 [vars]
 S3_REGION = "auto"
 S3_FORCE_PATH_STYLE = "true"
+S3_ENDPOINT = "https://378300101cd6bce5fbad799c8177b164.r2.cloudflarestorage.com"
+S3_BUCKET = "av-inspection-tours-files"
