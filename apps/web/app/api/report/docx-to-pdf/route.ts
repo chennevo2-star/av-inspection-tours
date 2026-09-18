@@ -1,9 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import {
   buildInspectionReportDocument,
   buildInspectionReportPdf,
@@ -13,7 +8,6 @@ import {
 import type { InspectionReportData } from "@av-inspection/report-generator";
 import { toArrayBuffer } from "../to-array-buffer";
 
-const execFileAsync = promisify(execFile);
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 /**
@@ -38,6 +32,23 @@ function toFileUri(absolutePath: string): string {
  * environments sometimes need a fallback while the new engine proves itself — hence "kept", not deleted.
  */
 async function convertDocxToPdfViaLibreOffice(docxBytes: Uint8Array): Promise<Uint8Array> {
+  // Imported lazily, only when this LibreOffice branch actually runs: `node:child_process` (and, less
+  // critically, `node:fs`/`node:os`) has no real implementation on Cloudflare Workers -- there's no OS
+  // process model in that isolate-based runtime at all, so this isn't a compat gap that might get fixed,
+  // it's a hard platform limitation. A real bug was hit here from a top-level `import { execFile } from
+  // "node:child_process"` (module-load-time, evaluated the moment Next.js dispatches ANY request to this
+  // route file, regardless of which branch actually runs): it broke the route entirely on the Workers/edge
+  // deploy (apps/web/wrangler.jsonc) even for the pure-JS default engine below, which never needs
+  // LibreOffice at all. Lazy imports mean this file loads cleanly on Workers as long as PDF_ENGINE stays
+  // unset there (the documented default) -- this fallback keeps working unmodified on the Container/Node
+  // deploy path, which is the only place it's ever actually invoked.
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { mkdtemp, readFile, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { default: path } = await import("node:path");
+  const execFileAsync = promisify(execFile);
+
   const sofficePath = process.env.SOFFICE_PATH ?? "C:\\Program Files\\LibreOffice\\program\\soffice.exe";
   const workDir = await mkdtemp(path.join(tmpdir(), "av-inspection-docx2pdf-"));
   const docxPath = path.join(workDir, "report.docx");
