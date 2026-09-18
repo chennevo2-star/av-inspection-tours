@@ -218,6 +218,24 @@ export const audioChunks = pgTable("audio_chunks", {
   cloudFileId: text("cloud_file_id"),
 });
 
+/**
+ * A generic file attached to a visit (spec: "קבצים מצורפים"), distinct from Photo/Audio. `SyncEntityType`
+ * already reserved "Attachment" (see shared-types/src/sync.ts's own comment) since the original Phase 1
+ * design, but this table never existed until the Microsoft 365 offline upgrade — closing a real,
+ * pre-existing gap, not introducing a new mechanism.
+ */
+export const attachments = pgTable("attachments", {
+  id: uuid("id").primaryKey(),
+  inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
+  floorId: uuid("floor_id").references(() => floors.id),
+  roomId: uuid("room_id").references(() => rooms.id),
+  taskId: uuid("task_id").references(() => tasks.id),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
+  cloudFileId: text("cloud_file_id"),
+});
+
 export const aiExtractionStatusEnum = pgEnum("ai_extraction_status", [
   "processing",
   "completed",

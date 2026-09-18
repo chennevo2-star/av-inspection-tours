@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type {
+  Attachment,
   Audio,
   AudioChunk,
   Contractor,
@@ -16,6 +17,26 @@ import type {
   SyncQueueItem,
   Task,
 } from "@av-inspection/shared-types";
+
+/** One row in the local-only `settings` table — arbitrary small app preferences (never secrets: the
+ * Microsoft Graph client secret lives server-side only, see packages/storage/src/graph-auth.ts; this is
+ * things like "prepare all active projects automatically" toggles). Keyed by a plain string, not synced. */
+export interface SettingRow {
+  key: string;
+  value: unknown;
+}
+
+/** One row in the local-only `syncMetadata` table — bookkeeping for incremental pull-sync (spec §9):
+ * the last time reference data for a given project was successfully pulled down, so a later pull can ask
+ * the server for "what changed since then" instead of re-downloading everything. Not synced itself (it
+ * describes this device's own sync progress, nothing the server needs to know). */
+export interface SyncMetadataRow {
+  /** `${projectId}:${entityType}`, e.g. "11111111-...:Floor" — one row per project per reference-data type. */
+  key: string;
+  projectId: string;
+  entityType: string;
+  lastPulledAt: string; // ISO datetime
+}
 
 /** A raw Blob row — used for both photo and audio-chunk local storage (ADR-003: Blobs, not base64). */
 export interface BlobRow {
@@ -46,6 +67,10 @@ export class LocalDb extends Dexie {
   audioChunkBlobs!: Table<BlobRow, string>;
   inspectors!: Table<Inspector, string>;
   inspectorStampBlobs!: Table<BlobRow, string>;
+  attachments!: Table<Attachment, string>;
+  attachmentBlobs!: Table<BlobRow, string>;
+  settings!: Table<SettingRow, string>;
+  syncMetadata!: Table<SyncMetadataRow, string>;
   syncQueue!: Table<SyncQueueItem, string>;
 
   constructor() {
@@ -129,6 +154,35 @@ export class LocalDb extends Dexie {
       audioChunkBlobs: "id",
       inspectors: "id, name",
       inspectorStampBlobs: "id",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
+    // v5 (Microsoft 365 offline upgrade, 2026-09-18): Attachment finally gets a real table (it was
+    // already reserved in SyncEntityType/shared-types/sync.ts but never implemented — see Attachment's
+    // own doc comment in entities.ts). `settings` and `syncMetadata` are new, local-only tables (never
+    // synced to the server themselves) supporting the offline/multi-project work — see their own
+    // interface doc comments above (SettingRow, SyncMetadataRow).
+    this.version(5).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      inspectors: "id, name",
+      inspectorStampBlobs: "id",
+      attachments: "id, inspectionId, floorId, roomId, taskId, syncStatus",
+      attachmentBlobs: "id",
+      settings: "key",
+      syncMetadata: "key, projectId, entityType",
       syncQueue: "id, entityType, entityId, createdAt",
     });
   }

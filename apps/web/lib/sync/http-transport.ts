@@ -2,9 +2,10 @@ import type { SendResult, SyncTransport } from "@av-inspection/sync-engine";
 import type { SyncQueueItem } from "@av-inspection/shared-types";
 import { getLocalDb } from "../db/local-db";
 
-const BLOB_TABLE_FOR_ENTITY: Partial<Record<string, "photoBlobs" | "audioChunkBlobs">> = {
+const BLOB_TABLE_FOR_ENTITY: Partial<Record<string, "photoBlobs" | "audioChunkBlobs" | "attachmentBlobs">> = {
   Photo: "photoBlobs",
   AudioChunk: "audioChunkBlobs",
+  Attachment: "attachmentBlobs",
 };
 
 /**

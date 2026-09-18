@@ -320,3 +320,27 @@ export const AudioChunk = z.object({
   syncStatus: SyncStatus.default("LOCAL_ONLY"),
 });
 export type AudioChunk = z.infer<typeof AudioChunk>;
+
+/* ------------------------------------------------------------------------------------------------
+ * Attachment (Microsoft 365 offline upgrade, 2026-09-18 — a generic file attached to a visit, distinct
+ * from Photo/Audio which are their own first-class entities with their own workflows). This entity type
+ * had actually been reserved in SyncEntityType/SYNC_ENTITY_PRIORITY (sync.ts) since the original Phase 1
+ * design — "Attachment" was already declared there, and the sync queue's drain order already accounted
+ * for it — but no concrete Zod shape, Dexie table, or server table was ever built to back it. This closes
+ * that gap; it doesn't introduce a new mechanism, it finishes wiring one that was already half-built.
+ * ---------------------------------------------------------------------------------------------- */
+
+export const Attachment = z.object({
+  id: uuid(),
+  inspectionId: uuid(),
+  floorId: uuid().nullable().default(null),
+  roomId: uuid().nullable().default(null),
+  taskId: uuid().nullable().default(null), // e.g. a spec sheet or a signed form attached to a specific task
+  fileName: z.string().min(1), // the user-facing name (also used to derive the Microsoft 365 file name)
+  mimeType: z.string().min(1),
+  timestamp: isoDateTime(),
+  localFileId: z.string(), // Dexie blob-table key
+  cloudFileId: z.string().nullable().default(null),
+  syncStatus: SyncStatus.default("LOCAL_ONLY"),
+});
+export type Attachment = z.infer<typeof Attachment>;

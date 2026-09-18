@@ -1,5 +1,5 @@
-import { AudioChunk, Photo } from "@av-inspection/shared-types";
-import { audioChunks, getDb, photos } from "@av-inspection/db";
+import { Attachment, AudioChunk, Photo } from "@av-inspection/shared-types";
+import { attachments, audioChunks, getDb, photos } from "@av-inspection/db";
 import { getStorage } from "@av-inspection/storage";
 import { extensionForMimeType } from "./mime.js";
 
@@ -53,6 +53,20 @@ export const FILE_SYNC_HANDLERS: Partial<Record<string, FileSyncHandler>> = {
     endTime: c.endTime ? isoToDate(c.endTime) : null,
     floorId: c.floorId,
     roomId: c.roomId,
+    cloudFileId,
+  })),
+
+  // Closes a real, pre-existing gap: "Attachment" was already reserved in SyncEntityType/
+  // SYNC_ENTITY_PRIORITY (shared-types/src/sync.ts) but never had a concrete handler until now.
+  Attachment: fileHandler(Attachment, attachments, "attachments", (a, cloudFileId) => ({
+    id: a.id,
+    inspectionId: a.inspectionId,
+    floorId: a.floorId,
+    roomId: a.roomId,
+    taskId: a.taskId,
+    fileName: a.fileName,
+    mimeType: a.mimeType,
+    timestamp: isoToDate(a.timestamp),
     cloudFileId,
   })),
 };

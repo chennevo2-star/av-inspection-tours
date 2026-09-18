@@ -5,6 +5,7 @@ import { createNote, listNotes } from "../../lib/db/notes";
 import { createIssue, listIssues } from "../../lib/db/issues";
 import { closeTask, createTask, listOpenTasks, listTasksForInspection } from "../../lib/db/tasks";
 import { capturePhoto, getPhotoBlob, listPhotos } from "../../lib/db/photos";
+import { addAttachment, deleteAttachment, getAttachmentBlob, listAttachments } from "../../lib/db/attachments";
 import { resetLocalDb } from "./helpers";
 
 const PROJECT = "77777777-7777-7777-7777-777777777777";
@@ -139,5 +140,42 @@ describe("Photo (spec §13 — Blob stored locally, never inlined)", () => {
     expect(queued).toHaveLength(1);
     // The queued payload must never carry the blob itself — see lib/db/photos.ts's comment.
     expect(queued[0]?.payload).not.toHaveProperty("blob");
+  });
+});
+
+describe("Attachment (spec §32 קבצים מצורפים — a generic file, distinct from Photo/Audio)", () => {
+  it("stores the file separately from the Attachment row and both are retrievable", async () => {
+    const inspection = await startInspection(PROJECT, "דני");
+    const file = new Blob(["fake-pdf-bytes"], { type: "application/pdf" });
+
+    const attachment = await addAttachment(inspection.id, file, "מפרט_טכני.pdf", { roomId: ROOM });
+
+    expect(attachment.roomId).toBe(ROOM);
+    expect(attachment.fileName).toBe("מפרט_טכני.pdf");
+    expect(attachment.mimeType).toBe("application/pdf");
+    expect(attachment.cloudFileId).toBeNull();
+    expect(attachment.localFileId).toBeTruthy();
+
+    const storedBlob = await getAttachmentBlob(attachment.localFileId);
+    expect(storedBlob).toBeInstanceOf(Blob);
+    expect(storedBlob?.size).toBe(file.size);
+
+    const attachments = await listAttachments(inspection.id);
+    expect(attachments).toHaveLength(1);
+
+    const queued = await getLocalDb().syncQueue.where("entityType").equals("Attachment").toArray();
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.payload).not.toHaveProperty("blob");
+  });
+
+  it("deleteAttachment removes both the row and its blob", async () => {
+    const inspection = await startInspection(PROJECT, "דני");
+    const file = new Blob(["fake-bytes"], { type: "text/plain" });
+    const attachment = await addAttachment(inspection.id, file, "notes.txt");
+
+    await deleteAttachment(attachment.id);
+
+    expect(await listAttachments(inspection.id)).toHaveLength(0);
+    expect(await getAttachmentBlob(attachment.localFileId)).toBeUndefined();
   });
 });
