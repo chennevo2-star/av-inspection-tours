@@ -110,3 +110,22 @@ Cloudflare שלך, וגם אין Docker מותקן כאן כדי לבדוק את
   גרסאות/פונטים של LibreOffice בין מערכות הפעלה.
 - זמן ה-cold start בפועל אחרי שינה (`sleepAfter = "30m"`) — אם מרגיש איטי מדי, אפשר להעלות את הזמן
   או לוותר על השינה (בעלות גבוהה יותר).
+
+## עדכון סטטוס (2026-09-18)
+
+שני דברים השתנו מאז שהמדריך הזה נכתב:
+
+1. **יצירת ה-PDF כבר לא תלויה ב-LibreOffice כברירת מחדל** — יש מנוע חדש בקוד טהור (pdf-lib + bidi-js
+   + פונט עברי מוטמע), נבדק מקצה-לקצה מול שרת אמיתי. LibreOffice עדיין קיים כנתיב חלופי מפורש
+   (`PDF_ENGINE=libreoffice`), לא נמחק. זה אומר שהקונטיינר הזה כבר לא **חייב** LibreOffice בשביל
+   ה-PDF — הוא עדיין מותקן ב-Dockerfile ליתר ביטחון, אבל ברירת המחדל היא המנוע החדש.
+2. **אין Docker מקומי בשום סביבה זמינה** — `npm run deploy:cloudflare` נכשל בפועל עם השגיאה
+   "The Docker CLI is needed to build the configured image but could not be launched". הפתרון
+   שאומץ בפועל: **Cloudflare Workers Builds** — חיבור ה-repository הזה (GitHub) ישירות ל-Worker
+   `av-inspection-tours` דרך הדשבורד (Settings → Builds → Connect), כך שהבנייה (כולל Docker) קורית
+   בענן של Cloudflare עצמם, לא אצלך. חשוב: ה-build הראשון לא מופעל אוטומטית מהחיבור עצמו — צריך
+   push חדש (commit כלשהו) אחרי שהחיבור הושלם כדי שהבנייה הראשונה תתחיל.
+
+Postgres אמיתי (Neon) הוקם והמיגרציות רצו נגדו בהצלחה; R2 bucket + API token הוגדרו; שלושת
+ה-secrets (`DATABASE_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) הוגדרו דרך `wrangler secret
+put`. הפריסה עצמה (build ראשון דרך Workers Builds) בתהליך.
