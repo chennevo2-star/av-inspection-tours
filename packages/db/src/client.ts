@@ -53,17 +53,21 @@ let _handle: DbHandle | null = null;
  * built-in, and a plain `import("cloudflare:sockets")` broke the build TWICE, in two different bundlers:
  * Next's own webpack build failed outright ("Module not found") until marked external, and then OpenNext's
  * OWN separate esbuild re-bundle pass (no exposed config for its own externals) failed the exact same way
- * regardless. Building the specifier at runtime via `new Function(...)` hides it from BOTH bundlers'
- * static import analysis entirely (a standard, well-known technique for this exact class of problem) --
- * neither ever sees the literal string "cloudflare:sockets" to try resolving, so this needs no bundler
- * config at all, and still resolves correctly as a genuine dynamic import once actually running in workerd.
+ * regardless. A first attempt at hiding the specifier via `new Function("specifier", "return
+ * import(specifier)")` fixed both build failures but broke at actual runtime instead -- confirmed live via
+ * `wrangler tail`: `EvalError: Code generation from strings disallowed for this context`, a hard workerd
+ * sandboxing restriction (no `eval`/`Function` constructor at all, regardless of CSP-style config). Moving
+ * the specifier into a `string`-WIDENED variable (not `new Function`) sidesteps both problems without any
+ * dynamic code generation: neither bundler's `import()` static-analysis triggers on a plain identifier
+ * (only on literal strings), so it's left as genuine runtime code, needing no bundler config in either
+ * stage -- and it's ordinary `import()`, not `eval`, so it's unaffected by workerd's sandboxing.
  */
-const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<{
-  connect: (address: { hostname: string; port: number }) => unknown;
-}>;
+const cloudflareSocketsSpecifier: string = "cloudflare:sockets";
 
 async function createWorkersSocket(options: { host: string; port: number }) {
-  const { connect } = await dynamicImport("cloudflare:sockets");
+  const { connect } = (await import(cloudflareSocketsSpecifier)) as {
+    connect: (address: { hostname: string; port: number }) => unknown;
+  };
   return connect({ hostname: options.host, port: options.port });
 }
 
