@@ -1,0 +1,35 @@
+# Cloudflare Worker + Container config -- see CLOUDFLARE_DEPLOY.md for the full deploy walkthrough,
+# including the manual dashboard/CLI steps this file can't do on its own (R2 bucket + API token,
+# provisioning a real production Postgres, `wrangler login`, secrets).
+#
+# Architecture: this Worker does *not* reimplement the app on Cloudflare's edge runtime. It runs the
+# existing Next.js server (Dockerfile, repo root) completely unmodified inside one Cloudflare Container
+# instance, and just proxies every request to it (worker/index.ts). This was a deliberate choice over
+# rewriting apps/web for Workers' edge runtime (e.g. via the OpenNext adapter): that path would require
+# upgrading off Next.js 14 first (OpenNext's Cloudflare adapter dropped Next 14 support) and, more
+# importantly, would require replacing the LibreOffice-based DOCX->PDF conversion (child_process,
+# ADR-004) with something edge-runtime-compatible -- Workers cannot run subprocesses or arbitrary native
+# binaries under any configuration. Running the whole app inside a Container sidesteps both problems.
+name = "av-inspection-tours"
+main = "worker/index.ts"
+compatibility_date = "2026-09-17"
+
+[[containers]]
+class_name = "AvInspectionContainer"
+image = "./Dockerfile"
+max_instances = 1
+
+[[durable_objects.bindings]]
+name = "AV_CONTAINER"
+class_name = "AvInspectionContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AvInspectionContainer"]
+
+# Non-secret config the container needs -- fine to commit. Real secrets (DATABASE_URL, S3 access
+# keys, ANTHROPIC_API_KEY) are deliberately NOT here: set them with `wrangler secret put <NAME>` so they
+# never end up committed to git or visible in plaintext in this file or the dashboard's vars list.
+[vars]
+S3_REGION = "auto"
+S3_FORCE_PATH_STYLE = "true"

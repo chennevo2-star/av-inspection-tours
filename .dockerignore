@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.turbo
+coverage
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.pglite-data
+local-uploads
+.local-uploads
+scripts/tunnel-url.txt
+scripts/tunnel-watchdog.log
