@@ -16,3 +16,5 @@ local-uploads/
 .pglite-data/
 .local-uploads/
 scripts/tunnel-url.txt
+.open-next/
+.wrangler/

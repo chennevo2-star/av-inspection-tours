@@ -18,7 +18,11 @@ import { ensureDbReady } from "../../../../../lib/server/ensure-db-ready";
  * are provisioned in this environment — that's correct, honest behavior (see ADR-006, AI_PIPELINE.md),
  * not a bug to route around.
  */
-export async function POST(_request: NextRequest, { params }: { params: { inspectionId: string } }) {
+export async function POST(
+  _request: NextRequest,
+  props: { params: Promise<{ inspectionId: string }> }
+) {
+  const params = await props.params;
   try {
     await ensureDbReady();
 

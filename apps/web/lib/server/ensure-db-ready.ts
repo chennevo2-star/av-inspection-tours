@@ -1,6 +1,34 @@
 import { runMigrations } from "@av-inspection/db";
 
 let migrationsPromise: Promise<void> | null = null;
+let hyperdriveBridged = false;
+
+/**
+ * On the Cloudflare Workers/edge deploy (apps/web/wrangler.jsonc), real Postgres isn't reachable via a
+ * plain `DATABASE_URL` env var the way it is on the Container/local-dev paths -- Hyperdrive is
+ * Cloudflare's connection-pooling proxy for that, exposed as a binding (`env.HYPERDRIVE`), not a
+ * process-level env var. `packages/db` deliberately stays unaware of any of this (it only ever reads
+ * `process.env.DATABASE_URL` -- see its own client.ts comment) so this bridge exists purely to make the
+ * Hyperdrive-provided connection string SHOW UP as that same env var, once, before anything calls into
+ * packages/db. Wrapped in try/catch and a no-op fallback: `getCloudflareContext()` throws (or the import
+ * itself may not even resolve meaningfully) on the Container/local-dev paths, where this whole bridge is
+ * correctly a no-op -- `process.env.DATABASE_URL` is already set directly there via `wrangler secret put`
+ * / `.env.local`, and must keep working completely unchanged.
+ */
+async function bridgeHyperdriveConnectionString(): Promise<void> {
+  if (hyperdriveBridged || process.env.DATABASE_URL) return;
+  hyperdriveBridged = true; // only ever attempt this once, success or failure
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = getCloudflareContext();
+    const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
+    if (hyperdrive?.connectionString) {
+      process.env.DATABASE_URL = hyperdrive.connectionString;
+    }
+  } catch {
+    // Not running under the OpenNext/Workers adapter (Container or local dev) -- expected, not an error.
+  }
+}
 
 /**
  * Applies every pending migration at most once per server process, on first use — there's no clean
@@ -18,7 +46,8 @@ let migrationsPromise: Promise<void> | null = null;
  * -- proving the DB itself was fine and the bug was purely this cached-rejection logic. Clearing the
  * memo on failure lets the very next request retry instead of the whole server needing a restart.
  */
-export function ensureDbReady(migrate: () => Promise<void> = runMigrations): Promise<void> {
+export async function ensureDbReady(migrate: () => Promise<void> = runMigrations): Promise<void> {
+  await bridgeHyperdriveConnectionString();
   if (!migrationsPromise) {
     migrationsPromise = migrate().catch((err) => {
       migrationsPromise = null;

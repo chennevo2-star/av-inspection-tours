@@ -1,5 +1,6 @@
 import { ReportScreen } from "./report-screen";
 
-export default function ReportPage({ params }: { params: { inspectionId: string } }) {
+export default async function ReportPage(props: { params: Promise<{ inspectionId: string }> }) {
+  const params = await props.params;
   return <ReportScreen inspectionId={params.inspectionId} />;
 }

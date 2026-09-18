@@ -1,0 +1,37 @@
+{
+  // Free-tier deployment path: the app runs directly on Cloudflare Workers' edge runtime (via the
+  // OpenNext adapter below), not inside a Container -- see the repo-root wrangler.toml + CLOUDFLARE_DEPLOY.md
+  // for the OTHER, Container-based deploy option (unmodified Node server, but requires the paid Workers
+  // plan for Containers). This file is the free-plan alternative: same Worker name/account, deploy
+  // whichever one you actually want live -- deploying one overwrites the other's code on that Worker.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "av-inspection-tours",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-18",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Real TCP to an external Postgres (Neon) isn't directly reachable from Workers' edge runtime the way
+  // a normal Node server can -- Hyperdrive is Cloudflare's own connection-pooling proxy for exactly this.
+  // Created via `npx wrangler hyperdrive create av-inspection-tours-db --connection-string=...` (the real
+  // Neon connection string, entered once at creation time -- not stored here). See
+  // packages/db/src/client.ts's own comment for how this binding's connection string reaches the DB
+  // client despite packages/db otherwise only knowing about a plain `DATABASE_URL` env var.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "65341f3ef65b4370ac7d0b2fe3f28d99"
+    }
+  ],
+  // Migrations run out-of-band (npm run db:migrate), never from inside a live request here -- see
+  // packages/db/src/client.ts's own runMigrations() comment for exactly why.
+  "vars": {
+    "SKIP_RUNTIME_MIGRATIONS": "true",
+    "S3_REGION": "auto",
+    "S3_FORCE_PATH_STYLE": "true",
+    "S3_ENDPOINT": "https://378300101cd6bce5fbad799c8177b164.r2.cloudflarestorage.com",
+    "S3_BUCKET": "av-inspection-tours-files"
+  }
+}

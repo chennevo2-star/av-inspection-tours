@@ -3,32 +3,37 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
+    "@av-inspection/ai-pipeline": "*",
+    "@av-inspection/db": "*",
+    "@av-inspection/report-generator": "*",
+    "@av-inspection/shared-types": "*",
+    "@av-inspection/storage": "*",
+    "@av-inspection/sync-engine": "*",
+    "@opennextjs/cloudflare": "^1.20.6",
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.7",
-    "zod": "^3.23.0",
     "drizzle-orm": "^0.33.0",
-    "@av-inspection/shared-types": "*",
-    "@av-inspection/sync-engine": "*",
-    "@av-inspection/db": "*",
-    "@av-inspection/storage": "*",
-    "@av-inspection/ai-pipeline": "*",
-    "@av-inspection/report-generator": "*"
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
     "@types/node": "^20.14.0",
-    "fake-indexeddb": "^6.0.0"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.5.0"
+  },
+  "overrides": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
   }
 }

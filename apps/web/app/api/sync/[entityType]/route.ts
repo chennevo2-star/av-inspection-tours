@@ -15,7 +15,8 @@ import { ensureDbReady } from "../../../../lib/server/ensure-db-ready";
  * Status codes matter to the client's retry logic (packages/sync-engine): 400 = bad payload, treated as
  * non-retriable (retrying the exact same bytes won't help); anything else = treated as transient/retriable.
  */
-export async function POST(request: NextRequest, { params }: { params: { entityType: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ entityType: string }> }) {
+  const params = await props.params;
   const { entityType } = params;
 
   try {
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest, { params }: { params: { entityT
  * request body instead — no multipart parsing at all, which sidesteps the whole problem and is simpler:
  * `Content-Type` is the file's real mime type, and `?meta=<url-encoded JSON>` carries the entity fields.
  */
-export async function PUT(request: NextRequest, { params }: { params: { entityType: string } }) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ entityType: string }> }) {
+  const params = await props.params;
   const { entityType } = params;
 
   try {
