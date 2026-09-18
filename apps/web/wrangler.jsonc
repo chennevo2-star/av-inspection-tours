@@ -25,6 +25,19 @@
       "id": "65341f3ef65b4370ac7d0b2fe3f28d99"
     }
   ],
+  // This deploys to the SAME Worker name ("av-inspection-tours") the earlier Container-based attempt
+  // used -- that attempt's worker/index.ts (repo root) registered a real Durable Object class,
+  // "AvInspectionContainer" (tag "v1" in the repo-root wrangler.toml). Cloudflare tracks that migration
+  // history server-side, per-Worker, independent of which local config file gets deployed with next --
+  // this OpenNext-generated script doesn't (and can't) export that class at all, so a real deploy fails
+  // outright without an explicit migration telling Cloudflare it's intentionally gone (real error hit
+  // here: "New version of script does not export class 'AvInspectionContainer'... [code: 10064]").
+  "migrations": [
+    {
+      "tag": "v2",
+      "deleted_classes": ["AvInspectionContainer"]
+    }
+  ],
   // Migrations run out-of-band (npm run db:migrate), never from inside a live request here -- see
   // packages/db/src/client.ts's own runMigrations() comment for exactly why.
   "vars": {
