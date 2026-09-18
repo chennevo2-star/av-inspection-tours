@@ -27,12 +27,22 @@
   ],
   // This deploys to the SAME Worker name ("av-inspection-tours") the earlier Container-based attempt
   // used -- that attempt's worker/index.ts (repo root) registered a real Durable Object class,
-  // "AvInspectionContainer" (tag "v1" in the repo-root wrangler.toml). Cloudflare tracks that migration
-  // history server-side, per-Worker, independent of which local config file gets deployed with next --
-  // this OpenNext-generated script doesn't (and can't) export that class at all, so a real deploy fails
-  // outright without an explicit migration telling Cloudflare it's intentionally gone (real error hit
-  // here: "New version of script does not export class 'AvInspectionContainer'... [code: 10064]").
+  // "AvInspectionContainer" (tag "v1" in the repo-root wrangler.toml, via new_sqlite_classes). Cloudflare
+  // tracks that migration history server-side, per-Worker, independent of which local config file gets
+  // deployed with next -- this OpenNext-generated script doesn't (and can't) export that class at all, so
+  // a real deploy fails outright without an explicit migration telling Cloudflare it's intentionally gone
+  // (real error hit here: "New version of script does not export class 'AvInspectionContainer'... [code:
+  // 10064]"). The "v1" entry below must repeat the ORIGINAL new_sqlite_classes migration verbatim (not
+  // just jump straight to "v2" deleting it) -- wrangler/Miniflare validates this array as a self-contained
+  // history, and a lone deleted_classes with no prior tag creating that class fails with "Cannot apply
+  // deleted_classes migration to non-existent class AvInspectionContainer", even though the real remote
+  // Cloudflare account's own history (from the earlier deploy) already has it. Already-applied tags are
+  // simply skipped against the real account, so repeating "v1" here is a safe no-op remotely.
   "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AvInspectionContainer"]
+    },
     {
       "tag": "v2",
       "deleted_classes": ["AvInspectionContainer"]
