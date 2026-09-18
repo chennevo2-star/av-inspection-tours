@@ -22,8 +22,11 @@ async function bridgeHyperdriveConnectionString(): Promise<void> {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = getCloudflareContext();
     const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
+    console.error("[DEBUG] hyperdrive.connectionString raw:", hyperdrive?.connectionString);
     if (hyperdrive?.connectionString) {
-      process.env.DATABASE_URL = stripTlsParamsForHyperdrive(hyperdrive.connectionString);
+      const stripped = stripTlsParamsForHyperdrive(hyperdrive.connectionString);
+      console.error("[DEBUG] stripped connection string:", stripped);
+      process.env.DATABASE_URL = stripped;
     }
   } catch {
     // Not running under the OpenNext/Workers adapter (Container or local dev) -- expected, not an error.
