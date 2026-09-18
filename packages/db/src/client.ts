@@ -36,27 +36,51 @@ type DbHandle =
 
 let _handle: DbHandle | null = null;
 
+/**
+ * Real bug hit here (confirmed live via `wrangler tail` against the deployed Worker, across several
+ * attempts): postgres.js's own `net.Socket()` + `tls.connect()` connection path -- reached through
+ * workerd's `node:net`/`node:tls` compat shim on the Cloudflare Workers/Hyperdrive deploy path
+ * (apps/web/wrangler.jsonc) -- never actually gets intercepted/routed by Hyperdrive at all, no matter what
+ * `ssl` option is passed (`ssl: 'require'` crashes on the unsupported `rejectUnauthorized` option; `ssl:
+ * false` and `ssl: {}` both just hang until Workers force-kills the request as "hung and would never
+ * generate a response"). Hyperdrive's real interception only engages for connections made through Workers'
+ * own native TCP API (`cloudflare:sockets`), which this driver doesn't use by default -- postgres.js does
+ * support supplying a custom per-connection socket factory for exactly this kind of runtime (its own
+ * `options.socket`), so this detects the Workers runtime the same way postgres.js's own code already does
+ * internally (`globalThis.Cloudflare`, see its index.js pool-size default) and wires that up.
+ *
+ * `cloudflare:sockets` isn't a real npm package or Node builtin -- it only exists as a workerd runtime
+ * built-in, and a plain `import("cloudflare:sockets")` broke the build TWICE, in two different bundlers:
+ * Next's own webpack build failed outright ("Module not found") until marked external, and then OpenNext's
+ * OWN separate esbuild re-bundle pass (no exposed config for its own externals) failed the exact same way
+ * regardless. Building the specifier at runtime via `new Function(...)` hides it from BOTH bundlers'
+ * static import analysis entirely (a standard, well-known technique for this exact class of problem) --
+ * neither ever sees the literal string "cloudflare:sockets" to try resolving, so this needs no bundler
+ * config at all, and still resolves correctly as a genuine dynamic import once actually running in workerd.
+ */
+const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<{
+  connect: (address: { hostname: string; port: number }) => unknown;
+}>;
+
+async function createWorkersSocket(options: { host: string; port: number }) {
+  const { connect } = await dynamicImport("cloudflare:sockets");
+  return connect({ hostname: options.host, port: options.port });
+}
+
 function getHandle(): DbHandle {
   if (_handle) return _handle;
 
   const connectionString = process.env.DATABASE_URL;
   if (connectionString) {
-    const client = postgres(connectionString, {
-      // Real bug hit here (confirmed live via `wrangler tail` against the deployed Worker): a bare
-      // `sslmode=require`/`prefer`/`allow` connection string makes postgres.js set
-      // `{ rejectUnauthorized: false }` before calling `tls.connect()` -- but workerd's `node:tls` compat
-      // shim (the Cloudflare Workers/Hyperdrive deploy path, apps/web/wrangler.jsonc) doesn't implement
-      // that option at all, throwing `ERR_OPTION_NOT_IMPLEMENTED` and hanging the request. Passing a plain
-      // object here takes postgres.js's OTHER branch (`Object.assign(options, ssl)` in its connection.js,
-      // not the string one) -- it still does the full SSL negotiation (unlike `ssl: false`, which skips
-      // the TLS handshake entirely and, tried first, broke Hyperdrive's own connection interception,
-      // turning the fast error into a silent hang instead) but never sets the unsupported field. Safe for
-      // the Container/direct-to-Neon path too: Node's own `tls.connect()` then just falls back to its
-      // default `rejectUnauthorized: true`, i.e. real certificate verification against Neon's
-      // publicly-trusted cert -- strictly safer than the `false` the connection string's `sslmode=require`
-      // implied, and confirmed unrelated to which driver mode (postgres vs PGlite) is active.
+    const isWorkersRuntime = typeof (globalThis as { Cloudflare?: unknown }).Cloudflare !== "undefined";
+    // postgres.js's own TS types don't declare `socket` at all, even though its real JS implementation
+    // (connection.js) supports it -- widening the type here (rather than casting the object literal
+    // itself) is what keeps TS's excess-property check from rejecting it.
+    const options: postgres.Options<Record<string, never>> & { socket?: typeof createWorkersSocket } = {
       ssl: {},
-    });
+    };
+    if (isWorkersRuntime) options.socket = createWorkersSocket;
+    const client = postgres(connectionString, options);
     _handle = { driver: "postgres", db: drizzlePg(client, { schema }) };
     return _handle;
   }
