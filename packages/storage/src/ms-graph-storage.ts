@@ -103,13 +103,21 @@ interface GraphSite {
 }
 
 /** The durable reference returned after any upload -- per spec, never rely on filename/path alone (a
- * rename in SharePoint must not break the link back to this record). */
+ * rename in SharePoint must not break the link back to this record). `key` is this same file's address
+ * relative to `rootFolder` -- i.e. exactly what `get()`/`getSignedGetUrl()`/`delete()` (the plain
+ * `ObjectStorage` interface) expect as their own `key` argument. Wiring this into the real sync pipeline
+ * (apps/web/lib/server/file-sync-entities.ts) stores THIS in a Photo/AudioChunk/Attachment row's
+ * `cloudFileId` column -- not `itemId` and not the full drive-root-relative path -- specifically so every
+ * existing `storage.get(cloudFileId)` call site (e.g. packages/ai-pipeline/src/orchestrator.ts, which
+ * predates this whole Graph integration and must keep working unmodified) continues to resolve correctly
+ * across all three storage backends without knowing which one is active. */
 export interface GraphUploadResult {
   driveId: string;
   itemId: string;
   webUrl: string;
   name: string;
   size: number;
+  key: string;
 }
 
 /** A slimmer version of `GraphUploadResult` for embedding in `Visit.json`'s reference arrays. */
@@ -136,12 +144,19 @@ export interface VisitFolderSet {
 }
 
 /** Folder items don't have a meaningful `size`/content, but callers benefit from the same driveId/itemId/
- * webUrl shape as an uploaded file (e.g. to store `oneDriveFolderId` in ProjectInfo.json). */
+ * webUrl shape as an uploaded file (e.g. to store `oneDriveFolderId` in ProjectInfo.json). `path` (added
+ * when wiring this into the real upload pipeline, apps/web/lib/server/file-sync-entities.ts) is the
+ * folder's path relative to the drive root, exactly what `uploadFile(folderPath, ...)` expects as its
+ * first argument -- without this, a caller holding e.g. a `VisitFolderSet.photos` result has no way to
+ * actually upload INTO that folder except by re-deriving the path itself from private segment constants
+ * (VISIT_PHOTOS_SEGMENT etc.), which aren't exported on purpose (they're an internal naming convention,
+ * not a public contract). */
 export interface GraphUploadResultLike {
   driveId: string;
   itemId: string;
   webUrl: string;
   name: string;
+  path: string;
 }
 
 export interface ProjectInfoJson {
@@ -177,12 +192,13 @@ export interface VisitJson {
   reportReferences: GraphFileReference[];
 }
 
-function toResultLike(item: GraphDriveItem, fallbackDriveId: string): GraphUploadResultLike {
+function toResultLike(item: GraphDriveItem, fallbackDriveId: string, path: string): GraphUploadResultLike {
   return {
     driveId: item.parentReference?.driveId ?? fallbackDriveId,
     itemId: item.id,
     webUrl: item.webUrl,
     name: item.name,
+    path,
   };
 }
 
@@ -386,11 +402,11 @@ export class MsGraphStorage implements ObjectStorage {
     const docsFolder = await this.ensureFolder(`${projectPath}/${DOCS_SEGMENT}`);
     return {
       projectPath,
-      root: toResultLike(root, driveId),
-      dataFolder: toResultLike(dataFolder, driveId),
-      visitsFolder: toResultLike(visitsFolder, driveId),
-      reportsFolder: toResultLike(reportsFolder, driveId),
-      docsFolder: toResultLike(docsFolder, driveId),
+      root: toResultLike(root, driveId, projectPath),
+      dataFolder: toResultLike(dataFolder, driveId, `${projectPath}/${PROJECT_DATA_SEGMENT}`),
+      visitsFolder: toResultLike(visitsFolder, driveId, `${projectPath}/${VISITS_SEGMENT}`),
+      reportsFolder: toResultLike(reportsFolder, driveId, `${projectPath}/${REPORTS_SEGMENT}`),
+      docsFolder: toResultLike(docsFolder, driveId, `${projectPath}/${DOCS_SEGMENT}`),
     };
   }
 
@@ -423,11 +439,11 @@ export class MsGraphStorage implements ObjectStorage {
     const reports = await this.ensureFolder(`${basePath}/${REPORTS_SEGMENT}`);
     return {
       visitPath: basePath,
-      root: toResultLike(baseItem, driveId),
-      photos: toResultLike(photos, driveId),
-      audio: toResultLike(audio, driveId),
-      attachments: toResultLike(attachments, driveId),
-      reports: toResultLike(reports, driveId),
+      root: toResultLike(baseItem, driveId, basePath),
+      photos: toResultLike(photos, driveId, `${basePath}/${VISIT_PHOTOS_SEGMENT}`),
+      audio: toResultLike(audio, driveId, `${basePath}/${VISIT_AUDIO_SEGMENT}`),
+      attachments: toResultLike(attachments, driveId, `${basePath}/${VISIT_ATTACHMENTS_SEGMENT}`),
+      reports: toResultLike(reports, driveId, `${basePath}/${REPORTS_SEGMENT}`),
     };
   }
 
@@ -521,16 +537,27 @@ export class MsGraphStorage implements ObjectStorage {
       headers: { "Content-Type": contentType },
       body: bufferBody(body),
     });
-    return this.toUploadResult(item, driveId);
+    return this.toUploadResult(item, driveId, path);
   }
 
-  private toUploadResult(item: GraphDriveItem, fallbackDriveId: string): GraphUploadResult {
+  /** Strips this instance's `rootFolder` prefix off a drive-root-relative path, producing exactly what
+   * `get()`/`getSignedGetUrl()`/`delete()` (the plain `ObjectStorage` interface, keyed relative to
+   * `rootFolder` — see those methods' own `${this.config.rootFolder}/${key}` construction) expect back as
+   * `key`. Falls back to the untouched path if it somehow doesn't start with `rootFolder` (defensive only
+   * — every call site here always builds paths under `rootFolder`, so this should never actually trigger). */
+  private toRelativeKey(path: string): string {
+    const prefix = `${this.config.rootFolder}/`;
+    return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+  }
+
+  private toUploadResult(item: GraphDriveItem, fallbackDriveId: string, path: string): GraphUploadResult {
     return {
       driveId: item.parentReference?.driveId ?? fallbackDriveId,
       itemId: item.id,
       webUrl: item.webUrl,
       name: item.name,
       size: item.size ?? 0,
+      key: this.toRelativeKey(path),
     };
   }
 
@@ -650,7 +677,7 @@ export class MsGraphStorage implements ObjectStorage {
     }
 
     if (!finalItem) throw new Error("Resumable upload finished without a final driveItem response from Graph");
-    return this.toUploadResult(finalItem, driveId);
+    return this.toUploadResult(finalItem, driveId, path);
   }
 
   /**

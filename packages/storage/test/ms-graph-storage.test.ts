@@ -133,6 +133,10 @@ describe("MsGraphStorage", () => {
       expect(result.visitsFolder.itemId).toBe("id-סיורים");
       expect(result.reportsFolder.itemId).toBe("id-דוחות");
       expect(result.docsFolder.itemId).toBe("id-מסמכים");
+      // `path` must be immediately usable as `uploadFile`'s folderPath argument -- callers (the real sync
+      // pipeline) have no other way to get from a folder-set entry to a place they can actually upload into.
+      expect(result.dataFolder.path).toBe(`${ROOT_FOLDER}/פרויקטים/מלון דן תל אביב/נתוני פרויקט`);
+      expect(result.visitsFolder.path).toBe(`${ROOT_FOLDER}/פרויקטים/מלון דן תל אביב/סיורים`);
 
       const postCalls = graphItemCalls(fetchMock).filter((c) => c.method === "POST");
       expect(postCalls).toHaveLength(7);
@@ -213,6 +217,8 @@ describe("MsGraphStorage", () => {
       const result = await storage.ensureVisitFolder({ name: PROJECT_NAME }, { id: "my-visit-id", date: "2026-09-18" });
 
       expect(result.visitPath).toBe(`${VISITS_ROOT}/2026-09-18_01`);
+      expect(result.photos.path).toBe(`${VISITS_ROOT}/2026-09-18_01/תמונות`);
+      expect(result.audio.path).toBe(`${VISITS_ROOT}/2026-09-18_01/הקלטות`);
 
       const postCalls = fetchMock.calls.filter((c) => c.method === "POST");
       // Exactly one folder-create POST (the _01 folder) + one file PUT... wait, marker write is a PUT, not POST.
@@ -339,6 +345,9 @@ describe("MsGraphStorage", () => {
         webUrl: "https://contoso.sharepoint.com/x/תמונה.jpg",
         name: "תמונה.jpg",
         size: 4,
+        // Relative to ROOT_FOLDER, exactly what get()/getSignedGetUrl()/delete() expect back as `key` --
+        // this is what actually gets stored in a Photo/AudioChunk/Attachment row's cloudFileId.
+        key: "פרויקטים/מלון דן/סיורים/2026-09-18/תמונות/תמונה.jpg",
       });
 
       const putCall = fetchMock.calls.at(-1)!;
@@ -346,6 +355,25 @@ describe("MsGraphStorage", () => {
       expect(putCall.headers["content-type"]).toBe("image/jpeg");
       expect(Buffer.isBuffer(putCall.body)).toBe(true);
       expect(Buffer.compare(putCall.body as Buffer, body)).toBe(0);
+    });
+
+    it("round-trips: get(uploadResult.key) resolves back to the exact same drive item", async () => {
+      // Locks in the invariant apps/web/lib/server/file-sync-entities.ts's wiring depends on: a caller
+      // that only ever sees the plain `ObjectStorage` interface (get/getSignedGetUrl/delete) must be able
+      // to pass `key` straight back in, with zero knowledge of the rich folder structure it came from.
+      primeAuthAndDrive(fetchMock);
+      const uploadPath = `${ROOT_FOLDER}/פרויקטים/מלון דן/סיורים/2026-09-18/תמונות`;
+      fetchMock.enqueueResponse(
+        jsonResponse(201, { id: "photo-item-2", name: "b.jpg", webUrl: "https://contoso.sharepoint.com/x/b.jpg", size: 3 })
+      );
+      const storage = makeStorage(fetchMock);
+      const uploaded = await storage.uploadFile(uploadPath, "b.jpg", Buffer.from("abc"), "image/jpeg");
+
+      fetchMock.enqueueResponse(jsonResponse(200, { id: "photo-item-2", name: "b.jpg", webUrl: "https://contoso.sharepoint.com/x/b.jpg" }));
+      const getCall = fetchMock.calls.length;
+      await storage.getSignedGetUrl(uploaded.key);
+
+      expect(fetchMock.calls[getCall]!.url).toBe(graphUrl(`/drives/${DRIVE_ID}/root:/${encodedPath([ROOT_FOLDER, "פרויקטים", "מלון דן", "סיורים", "2026-09-18", "תמונות", "b.jpg"])}`));
     });
 
     it("sanitizes the filename before uploading", async () => {
