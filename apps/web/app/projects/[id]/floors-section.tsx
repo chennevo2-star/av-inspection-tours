@@ -7,13 +7,19 @@ import { getLocalDb } from "../../../lib/db/local-db";
 import { createFloor, deleteFloor } from "../../../lib/db/floors";
 import { createRoom, deleteRoom } from "../../../lib/db/rooms";
 import { useMounted } from "../../../lib/hooks/use-mounted";
+import { FloorImportModal } from "./floor-import-modal";
 import styles from "./project-screen.module.css";
 
-/** Floors & Rooms (spec §Floor, §Room). Each floor lists its rooms inline with an add-room mini-form. */
+/**
+ * Floors & Rooms (spec §Floor, §Room). Each floor lists its rooms inline with an add-room mini-form. Also
+ * offers importing the floor list straight from a single-line riser-diagram PDF (user request) via
+ * FloorImportModal, as an alternative to typing each floor in by hand.
+ */
 export function FloorsSection({ projectId }: { projectId: string }) {
   const mounted = useMounted();
   const [floorName, setFloorName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const floors = useLiveQuery(async () => {
     if (!mounted) return [] as Floor[];
@@ -37,6 +43,17 @@ export function FloorsSection({ projectId }: { projectId: string }) {
   return (
     <section className={styles.section}>
       <h2 className={styles.sectionTitle}>קומות וחדרים</h2>
+
+      <button
+        type="button"
+        className={styles.addButton}
+        style={{ marginBottom: 14 }}
+        onClick={() => setImportOpen(true)}
+      >
+        📄 ייבוא קומות מסכמה חד קווית
+      </button>
+
+      {importOpen ? <FloorImportModal projectId={projectId} onClose={() => setImportOpen(false)} /> : null}
 
       <form className={styles.inlineForm} onSubmit={handleAddFloor}>
         <input
