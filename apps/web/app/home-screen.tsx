@@ -38,6 +38,10 @@ export function HomeScreen() {
           <span className={styles.menuIcon}>📁</span>
           <span className={styles.menuLabel}>פרויקטים</span>
         </Link>
+        <Link href="/contractors" className={styles.menuCard}>
+          <span className={styles.menuIcon}>🏗️</span>
+          <span className={styles.menuLabel}>רשימת קבלנים</span>
+        </Link>
         <Link href="/settings" className={styles.menuCard}>
           <span className={styles.menuIcon}>⚙️</span>
           <span className={styles.menuLabel}>הגדרות</span>

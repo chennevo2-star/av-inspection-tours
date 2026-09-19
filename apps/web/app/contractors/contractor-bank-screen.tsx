@@ -17,7 +17,8 @@ import styles from "./contractor-bank-screen.module.css";
  * "רשימת קבלנים" (session's user request): manage the cross-project contractor bank directly — add, edit,
  * remove. Separate from a project's own קבלנים section (contractors-section.tsx), which now offers this
  * bank as quick-pick options rather than owning the data itself — see ContractorBankEntry's own doc
- * comment in shared-types for how the two relate. Reachable from Settings, mirroring /inspectors.
+ * comment in shared-types for how the two relate. Reachable directly from the main menu (user request —
+ * moved off the Settings hub, where it first briefly lived).
  */
 export function ContractorBankScreen() {
   const mounted = useMounted();
@@ -52,8 +53,8 @@ export function ContractorBankScreen() {
 
   return (
     <main className={styles.main}>
-      <Link href="/settings" className={styles.backLink}>
-        ← חזרה להגדרות
+      <Link href="/" className={styles.backLink}>
+        ← תפריט ראשי
       </Link>
       <h1 className={styles.title}>רשימת קבלנים</h1>
       <p className={styles.hint}>
