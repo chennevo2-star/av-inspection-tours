@@ -119,9 +119,9 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
     inspectionNumber: inspection.inspectionNumber,
     inspectionDate: inspection.date,
     participants: inspection.participants,
-    generalText: "",
+    generalText: inspection.generalText ?? "",
     tasks: taskRows,
-    summaryText: "",
+    summaryText: inspection.summaryText ?? "",
     inspectorName: signature.name,
     inspectorStamp: signature.stamp,
   };

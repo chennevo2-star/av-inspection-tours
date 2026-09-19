@@ -213,6 +213,30 @@ export async function deleteInspection(id: string): Promise<void> {
   );
 }
 
+/**
+ * Persists the report screen's "כללי"/"סיכום" free text onto the real Inspection record (user request:
+ * editing these must auto-save, not just live transiently in the report screen's own React state -- see
+ * assemble-report-data.ts's own comment on generalText/summaryText for the bug this closes). Called
+ * debounced from the report screen on every edit, not behind an explicit save button.
+ */
+export async function updateInspectionReportText(
+  id: string,
+  patch: Partial<Pick<Inspection, "generalText" | "summaryText">>
+): Promise<Inspection> {
+  const db = getLocalDb();
+  const existing = await db.inspections.get(id);
+  if (!existing) throw new Error(`updateInspectionReportText: inspection ${id} not found locally`);
+
+  const updated = Inspection.parse({
+    ...existing,
+    ...patch,
+    syncStatus: existing.syncStatus === "SYNCED" ? "WAITING_FOR_SYNC" : existing.syncStatus,
+  });
+  await db.inspections.put(updated);
+  await enqueueSync("Inspection", id, "update", updated);
+  return updated;
+}
+
 export async function endInspection(id: string): Promise<Inspection> {
   const db = getLocalDb();
   const existing = await db.inspections.get(id);

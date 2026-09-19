@@ -13,19 +13,23 @@ import {
 import { listContractorBank } from "../../../lib/db/contractor-bank";
 import { CategoryPicker } from "../../../components/category-picker";
 import { useMounted } from "../../../lib/hooks/use-mounted";
+import { ContractorPickerModal } from "./contractor-picker-modal";
 import styles from "./project-screen.module.css";
 
 /**
  * Contractors + aliases (spec §Contractor, §25). Live-queried straight from IndexedDB. Offers the
- * cross-project bank (user request: "בפרויקט ניתן לבחור מרשימת קבלנים או להוסיף קבלן חדש") as quick-pick
- * chips above the add form — clicking one pre-fills the form rather than adding directly, so the user can
- * still adjust the field/discipline for this specific project before confirming.
+ * cross-project bank (user request: "בפרויקט ניתן לבחור מרשימת קבלנים או להוסיף קבלן חדש") via a
+ * "רשימת קבלנים" button that opens a filterable, multi-select picker (user request, replacing an earlier
+ * one-chip-at-a-time row -- see contractor-picker-modal.tsx) -- selecting several contractors there and
+ * confirming adds them all to the project in one go. The form below stays for a contractor that isn't in
+ * the bank yet at all.
  */
 export function ContractorsSection({ projectId }: { projectId: string }) {
   const mounted = useMounted();
   const [companyName, setCompanyName] = useState("");
   const [field, setField] = useState("");
   const [creating, setCreating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const contractors = useLiveQuery(
     () =>
@@ -50,11 +54,6 @@ export function ContractorsSection({ projectId }: { projectId: string }) {
     [bank, alreadyAdded]
   );
 
-  function handlePickFromBank(entry: ContractorBankEntry) {
-    setCompanyName(entry.companyName);
-    setField(entry.field ?? "");
-  }
-
   async function handleAdd(event: FormEvent) {
     event.preventDefault();
     const name = companyName.trim();
@@ -73,19 +72,21 @@ export function ContractorsSection({ projectId }: { projectId: string }) {
     <section className={styles.section}>
       <h2 className={styles.sectionTitle}>קבלנים</h2>
 
-      {bankOptions.length > 0 ? (
-        <div className={styles.aliasRow} style={{ marginBottom: 10 }}>
-          {bankOptions.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={styles.aliasChip}
-              onClick={() => handlePickFromBank(entry)}
-            >
-              + {entry.companyName}
-            </button>
-          ))}
-        </div>
+      <button
+        type="button"
+        className={styles.addButton}
+        style={{ marginBottom: 14 }}
+        onClick={() => setPickerOpen(true)}
+      >
+        📋 רשימת קבלנים
+      </button>
+
+      {pickerOpen ? (
+        <ContractorPickerModal
+          projectId={projectId}
+          bankOptions={bankOptions}
+          onClose={() => setPickerOpen(false)}
+        />
       ) : null}
 
       <form className={styles.inlineForm} onSubmit={handleAdd}>

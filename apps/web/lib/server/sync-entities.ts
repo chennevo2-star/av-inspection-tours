@@ -118,6 +118,8 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     status: i.status,
     aiStatus: i.aiStatus,
     reportStatus: i.reportStatus,
+    generalText: i.generalText,
+    summaryText: i.summaryText,
   })),
 
   Issue: handler(Issue, issues, (i) => ({

@@ -75,6 +75,19 @@
   color: var(--text-muted);
 }
 
+.cardTopSpacer {
+  flex: 1;
+}
+
+.deleteButton {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  font-size: 15px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
 .description {
   font-size: 16px;
   margin: 6px 0 10px;

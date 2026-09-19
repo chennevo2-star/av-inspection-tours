@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getAnyActiveInspection } from "../lib/db/inspections";
+import { getProject } from "../lib/db/projects";
 import { useMounted } from "../lib/hooks/use-mounted";
+import { formatTourName } from "../lib/format-tour-name";
 import styles from "./home-screen.module.css";
 
 /**
@@ -21,6 +23,11 @@ export function HomeScreen() {
     [mounted]
   );
 
+  const activeProject = useLiveQuery(
+    () => (activeInspection ? getProject(activeInspection.projectId) : Promise.resolve(undefined)),
+    [activeInspection]
+  );
+
   return (
     <main className={styles.main}>
       <h1 className={styles.title}>AV Inspection Tours</h1>
@@ -28,7 +35,7 @@ export function HomeScreen() {
 
       {activeInspection ? (
         <Link href={`/tour/${activeInspection.id}`} className={styles.recoveryBanner}>
-          <span>⚠ נמצא סיור שלא הסתיים (#{activeInspection.inspectionNumber})</span>
+          <span>⚠ נמצא סיור שלא הסתיים: {formatTourName(activeInspection.date, activeProject?.name ?? "…")}</span>
           <span className={styles.recoveryAction}>המשך סיור ←</span>
         </Link>
       ) : null}

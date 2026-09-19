@@ -7,6 +7,7 @@ import type { Inspection, Project } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
 import { endInspection, reopenInspection } from "../../../lib/db/inspections";
 import { useMounted } from "../../../lib/hooks/use-mounted";
+import { formatTourName } from "../../../lib/format-tour-name";
 import { NewTaskWizard } from "./new-task-wizard";
 import { TasksTable } from "./tasks-table";
 import styles from "./tour-screen.module.css";
@@ -94,12 +95,13 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
       <main className={styles.wrap}>
         <div className={styles.doneScreen}>
           <div className={styles.doneTitle}>✅ הסיור נשמר בהצלחה במכשיר</div>
+          <p className={styles.projectName}>{formatTourName(inspection.date, project?.name ?? "…")}</p>
           <p className={styles.doneHint}>
             ניתן עדיין לייצא דו״ח סיכום מהסיור הזה, או לפתוח אותו מחדש כדי לערוך משימות. הסנכרון לענן יבוצע
             ברקע כשיש חיבור.
           </p>
           <Link href={`/tour/${inspection.id}/report`} className={styles.doneButton} style={{ marginLeft: 10 }}>
-            ייצוא דו״ח
+            📄 דוח מסכם
           </Link>
           <button className={styles.doneButton} onClick={handleReopen} disabled={reopening} style={{ marginLeft: 10 }}>
             {reopening ? "פותח…" : "✏️ פתח לעריכה"}
@@ -117,8 +119,7 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
       <header className={styles.header}>
         <div className={styles.headerTop}>
           <div>
-            <div className={styles.projectName}>{project?.name ?? "…"}</div>
-            <div className={styles.inspectionNumber}>סיור #{inspection.inspectionNumber}</div>
+            <div className={styles.inspectionNumber}>{formatTourName(inspection.date, project?.name ?? "…")}</div>
           </div>
           <Link href={`/projects/${inspection.projectId}`} className={styles.exitLink}>
             יציאה
@@ -140,7 +141,7 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
         </button>
         <Link href={`/tour/${inspection.id}/report`} className={styles.bigButton}>
           <span className={styles.bigButtonIcon}>📄</span>
-          ייצוא דו״ח
+          דוח מסכם
         </Link>
         <button className={styles.bigButton} onClick={handleEndTour} disabled={ending}>
           <span className={styles.bigButtonIcon}>■</span>

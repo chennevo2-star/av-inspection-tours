@@ -124,6 +124,10 @@ export const inspections = pgTable("inspections", {
   status: inspectionStatusEnum("status").notNull().default("בתהליך"),
   aiStatus: aiStatusEnum("ai_status").notNull().default("לא_רלוונטי"),
   reportStatus: reportStatusEnum("report_status").notNull().default("לא_הופק"),
+  // The report screen's "כללי"/"סיכום" free text (user request: must auto-save, not just live in the
+  // report screen's local React state) -- see shared-types Inspection's own comment on these two fields.
+  generalText: text("general_text"),
+  summaryText: text("summary_text"),
 });
 
 export const contextEvents = pgTable("context_events", {

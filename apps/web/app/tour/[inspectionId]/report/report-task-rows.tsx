@@ -10,10 +10,12 @@ const MOVE_CANCEL_PX = 8;
 
 /**
  * The editable, reorderable, deletable task list in the report preview screen (spec: "drag-reorder via
- * long-press", "delete a row via a trash-can button after selecting it", "editable table text"). This
- * edits a local draft only (report-screen.tsx's `data.tasks`) -- it never touches the underlying Task
- * records in IndexedDB, so deleting or rewording a row here only changes what gets printed in this one
- * report, matching the "table text" framing in the spec rather than "edit the task itself".
+ * long-press", "delete a row via a trash-can button after selecting it", "editable table text"). Text
+ * edits (description/באחריות/status) and deletion write back to the real Task record in IndexedDB (user
+ * request: a task deleted here or from the tasks table must be gone from both) -- see report-screen.tsx's
+ * own `editTask`/`handleDeleteTask`. Only reordering and the floorName/roomName fields stay purely local
+ * to this one export's layout, since a task's floor/room are stored as ids, not names, so there's no real
+ * field for those two to write back to.
  *
  * Hand-rolled drag (pointer events, no library) to match this app's existing house style -- every other
  * non-trivial interaction here (speech dictation, the wizard's step flow) is hand-rolled too, and a full
@@ -92,7 +94,7 @@ export function ReportTaskRows({
   }
 
   function handleDelete(taskId: string) {
-    const confirmed = window.confirm("להסיר את השורה הזו מהדו״ח? המשימה עצמה תישאר שמורה במכשיר.");
+    const confirmed = window.confirm("למחוק את המשימה הזו? היא תימחק גם מטבלת המשימות ולא ניתן יהיה לשחזר אותה.");
     if (!confirmed) return;
     onDelete(taskId);
     setSelectedId(null);

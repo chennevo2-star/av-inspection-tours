@@ -72,12 +72,12 @@ export const SYNC_ENTITY_PRIORITY: Record<SyncEntityType, number> = {
 };
 
 /**
- * "delete" (user request: tour deletion should also delete from the cloud) is currently only actually
- * handled end-to-end for Inspection -- see apps/web/app/api/sync/[entityType]/route.ts's own DELETE
- * handler and packages/db/src/schema.ts's inspections-cascade comment for why deleting just that one row
- * server-side is enough (every child table's real FK `onDelete` behavior does the rest). Queuing a
- * "delete" for any other entity type isn't wired up yet -- not a silent gap, `enqueueSync` callers for
- * other entities simply don't use it.
+ * "delete" (user request: tour/task/project deletion should also delete from the cloud) is handled
+ * end-to-end for Inspection, Task, and Project -- see apps/web/app/api/sync/[entityType]/[entityId]/
+ * route.ts's own DELETE handler and packages/db/src/schema.ts's FK `onDelete` comments for why deleting
+ * just that one row server-side is enough in each case (the real cascade/set-null behavior does the
+ * rest). Queuing a "delete" for any other entity type isn't wired up yet -- not a silent gap, `enqueueSync`
+ * callers for other entities simply don't use it.
  */
 export const SyncOp = z.enum(["create", "update", "delete"]);
 export type SyncOp = z.infer<typeof SyncOp>;

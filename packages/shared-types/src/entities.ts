@@ -216,6 +216,12 @@ export const Inspection = z.object({
   syncStatus: SyncStatus.default("LOCAL_ONLY"),
   aiStatus: AiStatus.default("לא_רלוונטי"),
   reportStatus: ReportStatus.default("לא_הופק"),
+  /** The report screen's free-text "כללי"/"סיכום" fields (session's user request: these must actually
+   * persist and auto-save, not just live as a transient draft in the report screen's own React state --
+   * see assemble-report-data.ts's own comment for the bug this closes). Both null until the report screen
+   * is opened and something is typed. */
+  generalText: z.string().nullable().default(null),
+  summaryText: z.string().nullable().default(null),
 });
 export type Inspection = z.infer<typeof Inspection>;
 

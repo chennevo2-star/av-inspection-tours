@@ -73,3 +73,60 @@ export async function closeTask(id: string, closedInspectionId: string): Promise
   await enqueueSync("Task", id, "update", updated);
   return updated;
 }
+
+/**
+ * Field-text edits made on the report screen's task table (user request: those edits must actually save
+ * back to the real task, not just shape one export) -- deliberately narrow to the fields the report
+ * screen's row editor actually exposes as real Task columns (description/responsibleParty/status);
+ * floorName/roomName there are display-only derived strings with no direct write path back to
+ * Floor/Room, so they're never accepted here.
+ */
+export async function updateTask(
+  id: string,
+  patch: Partial<Pick<Task, "description" | "responsibleParty" | "status">>
+): Promise<Task> {
+  const db = getLocalDb();
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error(`updateTask: task ${id} not found locally`);
+
+  const updated = Task.parse({
+    ...existing,
+    ...patch,
+    syncStatus: existing.syncStatus === "SYNCED" ? "WAITING_FOR_SYNC" : existing.syncStatus,
+  });
+  await db.tasks.put(updated);
+  await enqueueSync("Task", id, "update", updated);
+  return updated;
+}
+
+/**
+ * Real, permanent task deletion (user request: deleting a task from either the tasks table or the summary
+ * report must delete it in both -- previously the report screen's own delete only ever hid the row from
+ * that one export, per its old doc comment; this replaces that with a real delete). Photos/attachments
+ * that were tagged to this task are kept but detached (taskId cleared), mirroring the server's own
+ * `onDelete: "set null"` FK behavior for exactly the same reason (packages/db/src/schema.ts) -- a task
+ * being removed shouldn't take its photos down with it.
+ */
+export async function deleteTask(id: string): Promise<void> {
+  const db = getLocalDb();
+  await db.transaction("rw", db.tasks, db.photos, db.attachments, db.syncQueue, async () => {
+    const existing = await db.tasks.get(id);
+    if (!existing) return; // already gone locally -- idempotent, matches deleteInspection()'s own rule
+
+    const [taggedPhotos, taggedAttachments] = await Promise.all([
+      db.photos.where("taskId").equals(id).toArray(),
+      db.attachments.where("taskId").equals(id).toArray(),
+    ]);
+    await Promise.all([
+      ...taggedPhotos.map((p) => db.photos.update(p.id, { taskId: null })),
+      ...taggedAttachments.map((a) => db.attachments.update(a.id, { taskId: null })),
+    ]);
+
+    await db.tasks.delete(id);
+
+    const staleQueueItems = await db.syncQueue.where("entityId").equals(id).toArray();
+    await db.syncQueue.bulkDelete(staleQueueItems.map((item) => item.id));
+
+    await enqueueSync("Task", id, "delete");
+  });
+}

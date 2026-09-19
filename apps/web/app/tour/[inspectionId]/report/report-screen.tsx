@@ -1,33 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { TaskStatus } from "@av-inspection/shared-types";
 import type { InspectionReportData } from "@av-inspection/report-generator";
 import { buildInspectionReportDocument, packToBlob } from "@av-inspection/report-generator";
 import { assembleReportData } from "../../../../lib/report/assemble-report-data";
 import { saveGeneratedFile } from "../../../../lib/report/save-file";
 import { useSpeechDictation } from "../../../../lib/recording/use-speech-dictation";
 import { useMounted } from "../../../../lib/hooks/use-mounted";
+import { formatTourName } from "../../../../lib/format-tour-name";
+import { updateInspectionReportText } from "../../../../lib/db/inspections";
+import { deleteTask as deleteTaskRecord, updateTask } from "../../../../lib/db/tasks";
 import { ReportTaskRows } from "./report-task-rows";
 import styles from "./report-screen.module.css";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const TEXT_SAVE_DEBOUNCE_MS = 800;
 
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready" };
 
 function reportFileName(data: InspectionReportData, extension: string): string {
   // Strip characters that are illegal in a Windows filename (OneDrive on this user's machine runs on
-  // Windows) -- ':' in particular would otherwise show up from a literal "–" date separator elsewhere.
-  const safeProject = data.projectName.replace(/[\\/:*?"<>|]/g, " ").trim();
-  return `סיור פיקוח עליון - ${safeProject} - ${data.inspectionDate}.${extension}`;
+  // Windows) -- the tour name's own quote marks in particular would otherwise land straight in the name.
+  const safeName = formatTourName(data.inspectionDate, data.projectName).replace(/[\\/:*?"<>|]/g, " ").trim();
+  return `${safeName}.${extension}`;
 }
 
 /**
- * "הפק דו״ח" preview/edit screen (this session's user request): loads the real tour data once into a
- * local draft, lets the user adjust the free-text "כללי"/"סיכום" fields and the task table (edit text,
- * reorder via long-press, delete a row) before actually producing a file, then exports to Word or PDF
- * and saves it via the user's own folder picker where the browser supports one. Nothing here is written
- * back to IndexedDB -- this is a print-time view of the data, not a second copy of the tour's records.
+ * "הפק דו״ח" / "דוח מסכם" preview/edit screen: loads the real tour data once into a local draft for
+ * export-time layout (reorder tasks via long-press), while the free-text "כללי"/"סיכום" fields and every
+ * task-row text edit (description/באחריות/status) auto-save back to the real Inspection/Task records in
+ * IndexedDB as you type (debounced -- user request: these must persist, not just live transiently in this
+ * screen's own React state). Row deletion is real too (user request: deleting a task here or from the
+ * tasks table removes it in both places) -- see ReportTaskRows' own comment. Reordering and the
+ * floorName/roomName display-text fields remain print-layout-only: they have no sane real-record write
+ * path (a task's floor/room are stored as ids, not names) and reordering is purely how this one export is
+ * laid out, not a property of the task itself.
  */
 export function ReportScreen({ inspectionId }: { inspectionId: string }) {
   const mounted = useMounted();
@@ -36,6 +45,39 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
   const [exporting, setExporting] = useState<"docx" | "pdf" | "xlsx" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimers = useRef(new Map<string, number>());
+  const pendingSaves = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of saveTimers.current.values()) window.clearTimeout(timer);
+    };
+  }, []);
+
+  function trackSave(promise: Promise<unknown>) {
+    pendingSaves.current += 1;
+    setSaveStatus("saving");
+    void promise
+      .catch((err: unknown) => console.error("[report-screen] auto-save failed:", err))
+      .finally(() => {
+        pendingSaves.current -= 1;
+        if (pendingSaves.current === 0) setSaveStatus("saved");
+      });
+  }
+
+  /** Debounces one real DB write per `key` (e.g. "inspection:generalText", "task:<id>") so fast typing
+   * doesn't fire a write per keystroke -- the debounce window resets on every call with the same key. */
+  function scheduleSave(key: string, run: () => Promise<unknown>) {
+    const existingTimer = saveTimers.current.get(key);
+    if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+    setSaveStatus("saving");
+    const timer = window.setTimeout(() => {
+      saveTimers.current.delete(key);
+      trackSave(run());
+    }, TEXT_SAVE_DEBOUNCE_MS);
+    saveTimers.current.set(key, timer);
+  }
 
   useEffect(() => {
     if (!mounted) return;
@@ -58,19 +100,42 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
 
   function editGeneralText(value: string) {
     setData((current) => current && { ...current, generalText: value });
+    scheduleSave("inspection:generalText", () => updateInspectionReportText(inspectionId, { generalText: value }));
   }
   function appendGeneralText(text: string) {
-    setData((current) => current && { ...current, generalText: current.generalText ? `${current.generalText} ${text}` : text });
+    setData((current) => {
+      if (!current) return current;
+      const generalText = current.generalText ? `${current.generalText} ${text}` : text;
+      scheduleSave("inspection:generalText", () => updateInspectionReportText(inspectionId, { generalText }));
+      return { ...current, generalText };
+    });
   }
   function editSummaryText(value: string) {
     setData((current) => current && { ...current, summaryText: value });
+    scheduleSave("inspection:summaryText", () => updateInspectionReportText(inspectionId, { summaryText: value }));
   }
   function appendSummaryText(text: string) {
-    setData((current) => current && { ...current, summaryText: current.summaryText ? `${current.summaryText} ${text}` : text });
+    setData((current) => {
+      if (!current) return current;
+      const summaryText = current.summaryText ? `${current.summaryText} ${text}` : text;
+      scheduleSave("inspection:summaryText", () => updateInspectionReportText(inspectionId, { summaryText }));
+      return { ...current, summaryText };
+    });
   }
 
   function editTask(id: string, patch: Partial<InspectionReportData["tasks"][number]>) {
     setData((current) => current && { ...current, tasks: current.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
+
+    // Only description/responsibleParty/status are real, writable Task columns -- floorName/roomName are
+    // display-only derived strings with no direct write path back to Floor/Room (see this screen's own
+    // top comment).
+    const realPatch: { description?: string; responsibleParty?: string | null; status?: ReturnType<typeof TaskStatus.parse> } = {};
+    if (patch.description !== undefined) realPatch.description = patch.description;
+    if (patch.responsibleParty !== undefined) realPatch.responsibleParty = patch.responsibleParty;
+    if (patch.status !== undefined) realPatch.status = TaskStatus.parse(patch.status);
+    if (Object.keys(realPatch).length > 0) {
+      scheduleSave(`task:${id}`, () => updateTask(id, realPatch));
+    }
   }
   function reorderTask(draggedId: string, targetId: string) {
     setData((current) => {
@@ -86,8 +151,9 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
       return { ...current, tasks };
     });
   }
-  function deleteTask(id: string) {
+  function handleDeleteTask(id: string) {
     setData((current) => current && { ...current, tasks: current.tasks.filter((t) => t.id !== id) });
+    trackSave(deleteTaskRecord(id));
   }
 
   async function handleExport(format: "docx" | "pdf" | "xlsx") {
@@ -172,9 +238,10 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
         <Link href={`/tour/${inspectionId}`} className={styles.backLink}>
           ← חזרה לסיור
         </Link>
-        <h1 className={styles.title}>
-          סיור פיקוח עליון מולטימדיה – {data.projectName} – {dateLabel}
-        </h1>
+        <h1 className={styles.title}>{formatTourName(data.inspectionDate, data.projectName)}</h1>
+        <p className={styles.saveIndicator}>
+          {saveStatus === "saving" ? "שומר…" : saveStatus === "saved" ? "✓ נשמר" : ""}
+        </p>
       </header>
 
       <div className={styles.metaBlock}>
@@ -198,7 +265,7 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
         <h2 className={styles.sectionTitle}>
           משימות <span className={styles.sectionCount}>({data.tasks.length})</span>
         </h2>
-        <ReportTaskRows tasks={data.tasks} onEdit={editTask} onReorder={reorderTask} onDelete={deleteTask} />
+        <ReportTaskRows tasks={data.tasks} onEdit={editTask} onReorder={reorderTask} onDelete={handleDeleteTask} />
       </section>
 
       <section className={styles.section}>

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Project } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
-import { updateProject } from "../../../lib/db/projects";
+import { deleteProject, updateProject } from "../../../lib/db/projects";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import { ContractorsSection } from "./contractors-section";
 import { FloorsSection } from "./floors-section";
@@ -64,6 +65,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
 }
 
 function ProjectBody({ project }: { project: Project }) {
+  const router = useRouter();
   const [name, setName] = useState(project.name);
   const [projectNumber, setProjectNumber] = useState(project.projectNumber ?? "");
   const [client, setClient] = useState(project.client ?? "");
@@ -71,6 +73,7 @@ function ProjectBody({ project }: { project: Project }) {
   const [description, setDescription] = useState(project.description ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Keep local form state in sync if the underlying record changes from elsewhere (e.g. a future sync
   // pulling a server-side edit) — but only while the user hasn't started editing, so we never clobber
@@ -100,6 +103,24 @@ function ProjectBody({ project }: { project: Project }) {
     }
   }
 
+  async function handleDeleteProject() {
+    const syncedWarning =
+      project.syncStatus === "SYNCED" || project.syncStatus === "WAITING_FOR_SYNC"
+        ? "\n\n⚠ הפרויקט הזה כבר סונכרן/ממתין לסנכרון לענן — הוא יימחק גם מהענן."
+        : "";
+    const confirmed = window.confirm(
+      `למחוק לצמיתות את הפרויקט "${project.name}"? כל הסיורים, הקבלנים, הקומות והחדרים שלו — כולל כל המשימות, התמונות וההקלטות מכל סיור — יימחקו גם הם. פעולה זו אינה הפיכה.${syncedWarning}`
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteProject(project.id);
+      router.push("/projects");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <main className={styles.main}>
       <Link href="/projects" className={styles.backLink}>
@@ -110,7 +131,7 @@ function ProjectBody({ project }: { project: Project }) {
         {project.syncStatus === "SYNCED" ? "✅ מסונכרן" : "🟠 מקומי בלבד"}
       </p>
 
-      <TourSection projectId={project.id} />
+      <TourSection projectId={project.id} projectName={project.name} />
       <PreviousToursSection project={project} />
 
       <section className={styles.section}>
@@ -177,6 +198,16 @@ function ProjectBody({ project }: { project: Project }) {
           {dirty && !saving ? <span className={styles.saveStatus}>יש שינויים שלא נשמרו</span> : null}
           <button className={styles.saveButton} onClick={handleSave} disabled={!dirty || saving}>
             {saving ? "שומר…" : "שמור"}
+          </button>
+        </div>
+        <div className={styles.saveRow} style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={() => void handleDeleteProject()}
+            disabled={deleting}
+          >
+            {deleting ? "מוחק…" : "🗑️ מחק פרויקט"}
           </button>
         </div>
       </section>

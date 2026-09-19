@@ -6,6 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
 import { getActiveInspectionForProject, startInspection } from "../../../lib/db/inspections";
 import { listInspectors } from "../../../lib/db/inspectors";
+import { formatTourName } from "../../../lib/format-tour-name";
 import styles from "./project-screen.module.css";
 
 /** A remembered convenience only (per-device, per-browser) — never treated as authentication/identity. */
@@ -16,8 +17,14 @@ const INSPECTOR_STORAGE_KEY = "av-inspection-tours:last-inspector-name";
  * field work is the point of the whole app — so it's placed first, before Settings. Now also collects
  * the tour's participant list up front (this session's user request) — that list is what the New Task
  * wizard's "באחריות" step lets you pick from.
+ *
+ * An existing open tour no longer blocks starting another one (user request: "גם אם קיים ללקוח סיור פתוח
+ * אפשר סיור חדש") — e.g. a second visit the same day before the first one's report was closed out. The
+ * "המשך" shortcut for the most recent open tour still shows above the form as a convenience; any OTHER
+ * open tour (there can now be more than one) is still reachable via "סיורים קודמים" below, which already
+ * marks open tours with 🟡.
  */
-export function TourSection({ projectId }: { projectId: string }) {
+export function TourSection({ projectId, projectName }: { projectId: string; projectName: string }) {
   const router = useRouter();
   const [inspector, setInspector] = useState("");
   const [inspectorId, setInspectorId] = useState<string | null>(null);
@@ -91,72 +98,77 @@ export function TourSection({ projectId }: { projectId: string }) {
       <h2 className={styles.sectionTitle}>סיור</h2>
 
       {activeInspection ? (
-        <>
+        <div style={{ marginBottom: 16 }}>
           <p className={styles.emptyHint}>יש סיור פתוח שטרם הסתיים.</p>
           <button className={styles.addButton} onClick={() => router.push(`/tour/${activeInspection.id}`)}>
-            ▶ המשך סיור #{activeInspection.inspectionNumber}
+            ▶ המשך {formatTourName(activeInspection.date, projectName)}
           </button>
-        </>
-      ) : (
-        <>
-          {inspectorBank && inspectorBank.length > 0 ? (
-            <div className={styles.aliasRow} style={{ marginBottom: 8 }}>
-              {inspectorBank.map((candidate) => (
-                <button
-                  key={candidate.id}
-                  type="button"
-                  className={styles.aliasChip}
-                  style={inspectorId === candidate.id ? { borderColor: "var(--accent)" } : undefined}
-                  onClick={() => selectBankInspector(candidate.id, candidate.name)}
-                >
-                  {candidate.stampLocalFileId ? "✍️ " : ""}
-                  {candidate.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div className={styles.inlineForm}>
-            <input
-              placeholder="שם המפקח (או בחר מהרשימה למעלה)"
-              value={inspector}
-              onChange={(e) => handleInspectorTyped(e.target.value)}
-              aria-label="שם המפקח"
-            />
-          </div>
-          <p className={styles.emptyHint} style={{ margin: "4px 0 12px", fontSize: 12 }}>
-            <Link href="/inspectors">ניהול בנק מפקחים וחותמות ←</Link>
+        </div>
+      ) : null}
+
+      <>
+        {activeInspection ? (
+          <p className={styles.emptyHint} style={{ margin: "0 0 8px" }}>
+            או התחל סיור נוסף:
           </p>
+        ) : null}
+        {inspectorBank && inspectorBank.length > 0 ? (
+          <div className={styles.aliasRow} style={{ marginBottom: 8 }}>
+            {inspectorBank.map((candidate) => (
+              <button
+                key={candidate.id}
+                type="button"
+                className={styles.aliasChip}
+                style={inspectorId === candidate.id ? { borderColor: "var(--accent)" } : undefined}
+                onClick={() => selectBankInspector(candidate.id, candidate.name)}
+              >
+                {candidate.stampLocalFileId ? "✍️ " : ""}
+                {candidate.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className={styles.inlineForm}>
+          <input
+            placeholder="שם המפקח (או בחר מהרשימה למעלה)"
+            value={inspector}
+            onChange={(e) => handleInspectorTyped(e.target.value)}
+            aria-label="שם המפקח"
+          />
+        </div>
+        <p className={styles.emptyHint} style={{ margin: "4px 0 12px", fontSize: 12 }}>
+          <Link href="/inspectors">ניהול בנק מפקחים וחותמות ←</Link>
+        </p>
 
-          <form onSubmit={handleAddParticipant} className={styles.inlineForm}>
-            <input
-              placeholder="הוסף משתתף לסיור (שם)"
-              value={participantInput}
-              onChange={(e) => setParticipantInput(e.target.value)}
-              aria-label="הוסף משתתף"
-            />
-            <button className={styles.addButton} type="submit" disabled={!participantInput.trim()}>
-              הוסף
-            </button>
-          </form>
-
-          {participants.length > 0 ? (
-            <div className={styles.aliasRow} style={{ marginBottom: 12 }}>
-              {participants.map((name) => (
-                <span key={name} className={styles.aliasChip}>
-                  {name}
-                  <button onClick={() => handleRemoveParticipant(name)} aria-label={`הסר את ${name}`}>
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <button className={styles.addButton} onClick={handleStart} disabled={starting || !inspector.trim()}>
-            🚶 התחל סיור חדש
+        <form onSubmit={handleAddParticipant} className={styles.inlineForm}>
+          <input
+            placeholder="הוסף משתתף לסיור (שם)"
+            value={participantInput}
+            onChange={(e) => setParticipantInput(e.target.value)}
+            aria-label="הוסף משתתף"
+          />
+          <button className={styles.addButton} type="submit" disabled={!participantInput.trim()}>
+            הוסף
           </button>
-        </>
-      )}
+        </form>
+
+        {participants.length > 0 ? (
+          <div className={styles.aliasRow} style={{ marginBottom: 12 }}>
+            {participants.map((name) => (
+              <span key={name} className={styles.aliasChip}>
+                {name}
+                <button onClick={() => handleRemoveParticipant(name)} aria-label={`הסר את ${name}`}>
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <button className={styles.addButton} onClick={handleStart} disabled={starting || !inspector.trim()}>
+          🚶 התחל סיור חדש
+        </button>
+      </>
     </section>
   );
 }

@@ -4,14 +4,24 @@ import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Photo, Task } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
-import { listTasksForInspection } from "../../../lib/db/tasks";
+import { deleteTask, listTasksForInspection } from "../../../lib/db/tasks";
 import { getPhotoBlob } from "../../../lib/db/photos";
 import styles from "./tasks-table.module.css";
+
+async function handleDeleteTask(task: Task) {
+  const confirmed = window.confirm(
+    `למחוק את משימה #${task.friendlyNumber}? היא תימחק גם מהדו״ח המסכם ולא ניתן יהיה לשחזר אותה.`
+  );
+  if (!confirmed) return;
+  await deleteTask(task.id);
+}
 
 /** "טבלת משימות" — every task from this tour, first-added first, with its photos (this session's user
  * request — flipped from an earlier most-recent-first ordering per direct feedback). A full-screen
  * overlay like the wizard, not a separate route, so it can be opened/closed instantly without losing the
- * main tour screen's state. */
+ * main tour screen's state. Deletion here is real (user request: deleting a task here or from the summary
+ * report removes it in both) -- this list is live-queried, so a delete from either screen is reflected the
+ * next time this one is opened. */
 export function TasksTable({ inspectionId, onClose }: { inspectionId: string; onClose: () => void }) {
   const tasks = useLiveQuery(() => listTasksForInspection(inspectionId), [inspectionId]);
   const floors = useLiveQuery(() => getLocalDb().floors.toArray(), []);
@@ -64,6 +74,15 @@ function TaskCard({ task, floorName, roomName }: { task: Task; floorName?: strin
       <div className={styles.cardTop}>
         <span className={styles.taskNumber}>#{task.friendlyNumber}</span>
         {location ? <span className={styles.location}>{location}</span> : null}
+        <span className={styles.cardTopSpacer} />
+        <button
+          type="button"
+          className={styles.deleteButton}
+          onClick={() => void handleDeleteTask(task)}
+          aria-label={`מחק משימה #${task.friendlyNumber}`}
+        >
+          🗑️
+        </button>
       </div>
       <p className={styles.description}>{task.description}</p>
       <div className={styles.metaRow}>
