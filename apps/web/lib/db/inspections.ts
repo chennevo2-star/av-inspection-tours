@@ -157,6 +157,7 @@ export async function deleteInspection(id: string): Promise<void> {
       db.audioChunkBlobs,
       db.attachments,
       db.attachmentBlobs,
+      db.syncQueue,
     ],
     async () => {
       const [contextEvents, notes, issues, tasks, photos, audioRows, audioChunks, attachments] = await Promise.all([
@@ -184,6 +185,30 @@ export async function deleteInspection(id: string): Promise<void> {
       await db.attachments.bulkDelete(attachments.map((r) => r.id));
 
       await db.inspections.delete(id);
+
+      // Every one of these local rows is gone now, so any PENDING create/update queue item for any of
+      // them (the inspection itself included) is moot -- draining it later would either recreate a row
+      // that no longer exists locally to mark synced, or (for a Photo/AudioChunk/Attachment item) try to
+      // read a blob that bulkDelete just removed, permanently failing as a non-retriable "blob no longer
+      // exists" error. Purge them all, then enqueue exactly one real "delete" for the inspection itself --
+      // the server's DELETE handler cascades every child row via the same real FK `onDelete` behavior
+      // this local delete just mirrored by hand (see packages/db/src/schema.ts's own comments), so no
+      // child-entity delete needs to be queued separately.
+      const deletedIds = [
+        id,
+        ...contextEvents.map((r) => r.id),
+        ...notes.map((r) => r.id),
+        ...issues.map((r) => r.id),
+        ...tasks.map((r) => r.id),
+        ...photos.map((r) => r.id),
+        ...audioRows.map((r) => r.id),
+        ...audioChunks.map((r) => r.id),
+        ...attachments.map((r) => r.id),
+      ];
+      const staleQueueItems = await db.syncQueue.where("entityId").anyOf(deletedIds).toArray();
+      await db.syncQueue.bulkDelete(staleQueueItems.map((item) => item.id));
+
+      await enqueueSync("Inspection", id, "delete");
     }
   );
 }

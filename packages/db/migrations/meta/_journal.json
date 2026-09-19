@@ -43,6 +43,13 @@
       "when": 1789805722374,
       "tag": "0005_romantic_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789812754250,
+      "tag": "0006_nervous_leper_queen",
+      "breakpoints": true
     }
   ]
 }

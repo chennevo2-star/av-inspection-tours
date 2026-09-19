@@ -171,7 +171,9 @@ export const issues = pgTable("issues", {
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey(),
-  issueId: uuid("issue_id").references(() => issues.id),
+  // set null (not cascade): a task isn't exclusively owned by the issue it came from -- it has its own
+  // separate workflow (spec §27, closing/reassigning) that should survive the issue being gone.
+  issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   floorId: uuid("floor_id").references(() => floors.id),
   roomId: uuid("room_id").references(() => rooms.id),
@@ -179,9 +181,15 @@ export const tasks = pgTable("tasks", {
   description: text("description").notNull(),
   responsibleParty: text("responsible_party"),
   status: taskStatusEnum("status").notNull().default("פתוח"),
-  createdInspectionId: uuid("created_inspection_id").notNull().references(() => inspections.id),
-  lastUpdatedInspectionId: uuid("last_updated_inspection_id").references(() => inspections.id),
-  closedInspectionId: uuid("closed_inspection_id").references(() => inspections.id),
+  // cascade: a task genuinely belongs to whichever inspection created it (deleteInspection() in
+  // apps/web/lib/db/inspections.ts already deletes it locally on that same basis -- this makes the server
+  // match instead of blocking the delete with a real FK violation, which is what a bare `.references()`
+  // with no onDelete does by default).
+  createdInspectionId: uuid("created_inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
+  // set null (not cascade): the task itself isn't owned by whichever LATER inspection happened to close
+  // or last touch it -- it should survive that inspection being deleted, just losing this pointer.
+  lastUpdatedInspectionId: uuid("last_updated_inspection_id").references(() => inspections.id, { onDelete: "set null" }),
+  closedInspectionId: uuid("closed_inspection_id").references(() => inspections.id, { onDelete: "set null" }),
   dueDate: date("due_date"),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -191,8 +199,11 @@ export const photos = pgTable("photos", {
   inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
   floorId: uuid("floor_id").references(() => floors.id),
   roomId: uuid("room_id").references(() => rooms.id),
-  issueId: uuid("issue_id").references(() => issues.id),
-  taskId: uuid("task_id").references(() => tasks.id),
+  // set null: a photo can be tagged to an issue/task from a DIFFERENT inspection than the one that
+  // captured it -- it must survive that issue/task (or its owning inspection) being deleted; only its own
+  // `inspectionId` above decides whether the photo itself goes away.
+  issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
+  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
   caption: text("caption"),
   cloudFileId: text("cloud_file_id"), // object-storage key; never stored inline in Postgres
@@ -229,7 +240,8 @@ export const attachments = pgTable("attachments", {
   inspectionId: uuid("inspection_id").notNull().references(() => inspections.id, { onDelete: "cascade" }),
   floorId: uuid("floor_id").references(() => floors.id),
   roomId: uuid("room_id").references(() => rooms.id),
-  taskId: uuid("task_id").references(() => tasks.id),
+  // set null, same reasoning as photos.taskId above.
+  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),
   timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),

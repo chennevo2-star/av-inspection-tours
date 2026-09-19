@@ -49,6 +49,10 @@ export class HttpSyncTransport implements SyncTransport {
   }
 
   private async doSend(item: SyncQueueItem): Promise<Response> {
+    if (item.op === "delete") {
+      return fetch(`${this.baseUrl}/${item.entityType}/${item.entityId}`, { method: "DELETE" });
+    }
+
     const blobTableName = BLOB_TABLE_FOR_ENTITY[item.entityType];
 
     if (!blobTableName) {
