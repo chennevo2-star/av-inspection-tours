@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Inspection, Project } from "@av-inspection/shared-types";
-import { listInspectionsForClient, listInspectionsForProject } from "../../../lib/db/inspections";
+import { deleteInspection, listInspectionsForClient, listInspectionsForProject } from "../../../lib/db/inspections";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import styles from "./project-screen.module.css";
 
@@ -11,22 +11,63 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("he-IL", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-function TourRow({ inspection, projectLabel }: { inspection: Inspection; projectLabel?: string }) {
+async function handleDelete(inspection: Inspection) {
+  const syncedWarning =
+    inspection.syncStatus === "SYNCED" || inspection.syncStatus === "WAITING_FOR_SYNC"
+      ? "\n\n⚠ סיור זה כבר סונכרן/ממתין לסנכרון לענן — המחיקה כרגע מקומית בלבד ולא תמחק אותו מהענן."
+      : "";
+  const confirmed = window.confirm(
+    `למחוק את סיור #${inspection.inspectionNumber} לצמיתות? כל המשימות, התמונות וההקלטות שלו יימחקו גם הן. פעולה זו אינה הפיכה.${syncedWarning}`
+  );
+  if (!confirmed) return;
+  await deleteInspection(inspection.id);
+}
+
+/** `onDelete` is only passed for a project's OWN tours (not the "same client, other projects" list below)
+ * — deleting a tour that belongs to a different project from inside this one would be confusing at best. */
+function TourRow({
+  inspection,
+  projectLabel,
+  deletable,
+}: {
+  inspection: Inspection;
+  projectLabel?: string;
+  deletable?: boolean;
+}) {
   return (
     <li className={styles.item}>
-      <Link href={`/tour/${inspection.id}`} className={styles.itemHeader} style={{ textDecoration: "none", color: "inherit" }}>
-        <div>
-          <div className={styles.itemName}>
-            סיור #{inspection.inspectionNumber}
-            {projectLabel ? ` · ${projectLabel}` : ""}
+      <div className={styles.itemHeader}>
+        <Link
+          href={`/tour/${inspection.id}`}
+          style={{ textDecoration: "none", color: "inherit", flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
+        >
+          <div>
+            <div className={styles.itemName}>
+              סיור #{inspection.inspectionNumber}
+              {projectLabel ? ` · ${projectLabel}` : ""}
+            </div>
+            <div className={styles.itemMeta}>
+              {formatDate(inspection.date)} · {inspection.inspector}
+              {inspection.endTime === null ? " · 🟡 פתוח" : ""}
+            </div>
           </div>
-          <div className={styles.itemMeta}>
-            {formatDate(inspection.date)} · {inspection.inspector}
-            {inspection.endTime === null ? " · 🟡 פתוח" : ""}
-          </div>
-        </div>
-        <span aria-hidden="true">←</span>
-      </Link>
+          <span aria-hidden="true">←</span>
+        </Link>
+        {deletable ? (
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={(event) => {
+              event.preventDefault();
+              void handleDelete(inspection);
+            }}
+            aria-label={`מחק סיור #${inspection.inspectionNumber}`}
+            style={{ marginRight: 8 }}
+          >
+            🗑️
+          </button>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -60,7 +101,7 @@ export function PreviousToursSection({ project }: { project: Project }) {
       {ownInspections.length > 0 ? (
         <ul className={styles.list}>
           {ownInspections.map((inspection) => (
-            <TourRow key={inspection.id} inspection={inspection} />
+            <TourRow key={inspection.id} inspection={inspection} deletable />
           ))}
         </ul>
       ) : (

@@ -124,6 +124,70 @@ export async function listInspectionsForClient(
     );
 }
 
+/**
+ * Deletes an inspection and everything it created locally (user request: "מחיקת סיורים") — context
+ * events, notes, issues, tasks it created, photos/audio/attachments and their blobs, then the inspection
+ * itself, all in one transaction so a mid-delete failure can't leave the tour half-erased.
+ *
+ * Two real, deliberate limitations, not silent ones:
+ * (1) A task this inspection created but a LATER inspection closed/updated (`closedInspectionId`/
+ * `lastUpdatedInspectionId`) is still deleted along with it -- the task only truly belongs to whichever
+ * inspection created it (`createdInspectionId`), and reliably re-homing a cross-tour task to survive its
+ * creating tour's deletion would need real product input on what "survives" should even mean here, not a
+ * guess. In practice this only matters once a project has enough tours for one to reference another's
+ * tasks, which single/early tours never hit.
+ * (2) This is LOCAL-ONLY, same known gap as `deleteContractor()`: no delete-sync propagation exists yet
+ * (OFFLINE_SYNC.md's own backlog), so a tour that already reached the server stays there even after being
+ * deleted on this device -- the caller is responsible for warning about that before confirming.
+ */
+export async function deleteInspection(id: string): Promise<void> {
+  const db = getLocalDb();
+  await db.transaction(
+    "rw",
+    [
+      db.inspections,
+      db.contextEvents,
+      db.notes,
+      db.issues,
+      db.tasks,
+      db.photos,
+      db.photoBlobs,
+      db.audio,
+      db.audioChunks,
+      db.audioChunkBlobs,
+      db.attachments,
+      db.attachmentBlobs,
+    ],
+    async () => {
+      const [contextEvents, notes, issues, tasks, photos, audioRows, audioChunks, attachments] = await Promise.all([
+        db.contextEvents.where("inspectionId").equals(id).toArray(),
+        db.notes.where("inspectionId").equals(id).toArray(),
+        db.issues.where("inspectionId").equals(id).toArray(),
+        db.tasks.where("createdInspectionId").equals(id).toArray(),
+        db.photos.where("inspectionId").equals(id).toArray(),
+        db.audio.where("inspectionId").equals(id).toArray(),
+        db.audioChunks.where("inspectionId").equals(id).toArray(),
+        db.attachments.where("inspectionId").equals(id).toArray(),
+      ]);
+
+      await db.photoBlobs.bulkDelete(photos.map((p) => p.localFileId));
+      await db.audioChunkBlobs.bulkDelete(audioChunks.map((c) => c.localFileId));
+      await db.attachmentBlobs.bulkDelete(attachments.map((a) => a.localFileId));
+
+      await db.contextEvents.bulkDelete(contextEvents.map((r) => r.id));
+      await db.notes.bulkDelete(notes.map((r) => r.id));
+      await db.issues.bulkDelete(issues.map((r) => r.id));
+      await db.tasks.bulkDelete(tasks.map((r) => r.id));
+      await db.photos.bulkDelete(photos.map((r) => r.id));
+      await db.audioChunks.bulkDelete(audioChunks.map((r) => r.id));
+      await db.audio.bulkDelete(audioRows.map((r) => r.id));
+      await db.attachments.bulkDelete(attachments.map((r) => r.id));
+
+      await db.inspections.delete(id);
+    }
+  );
+}
+
 export async function endInspection(id: string): Promise<Inspection> {
   const db = getLocalDb();
   const existing = await db.inspections.get(id);
