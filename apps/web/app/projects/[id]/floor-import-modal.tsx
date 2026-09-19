@@ -2,8 +2,18 @@
 
 import { useRef, useState } from "react";
 import { createFloor } from "../../../lib/db/floors";
-import { extractFloorsFromPdf, type DetectedFloor } from "../../../lib/floor-import/parse-single-line-pdf";
+import { extractFloorsFromPdf, extractFloorsFromPdfBytes, type DetectedFloor } from "../../../lib/floor-import/parse-single-line-pdf";
+import {
+  FilePickerCancelledError,
+  downloadPickedFile,
+  openOneDriveFilePicker,
+} from "../../../lib/graph-picker/open-onedrive-file-picker";
 import styles from "./floor-import-modal.module.css";
+
+// Same two env vars the OneDrive picker's own resolveOneDriveSiteUrl() needs (it derives the OneDrive URL
+// itself via Graph, so unlike the SharePoint folder picker this doesn't also need NEXT_PUBLIC_MS_GRAPH_SITE_URL).
+const ONEDRIVE_PICKER_CONFIGURED =
+  !!process.env.NEXT_PUBLIC_MS_GRAPH_CLIENT_ID && !!process.env.NEXT_PUBLIC_MS_GRAPH_TENANT_ID;
 
 function defaultDisplayName(floor: DetectedFloor): string {
   return floor.name ? `${floor.label} - ${floor.name}` : floor.label;
@@ -33,23 +43,44 @@ export function FloorImportModal({ projectId, onClose }: { projectId: string; on
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  function applyDetectedFloors(floors: DetectedFloor[]) {
+    if (floors.length === 0) {
+      setLoad({
+        status: "error",
+        message: "לא זוהתה אף קומה בקובץ. הפורמט חייב להיות תואם לסכמה חד-קווית עם מספרי קומות בצד שמאל.",
+      });
+      return;
+    }
+    setRows(floors.map((floor) => ({ floor, checked: true, name: defaultDisplayName(floor) })));
+    setLoad({ status: "ready" });
+  }
+
   async function handleFileChosen(file: File) {
     setLoad({ status: "parsing" });
     try {
-      const floors = await extractFloorsFromPdf(file);
-      if (floors.length === 0) {
-        setLoad({
-          status: "error",
-          message: "לא זוהתה אף קומה בקובץ. הפורמט חייב להיות תואם לסכמה חד-קווית עם מספרי קומות בצד שמאל.",
-        });
-        return;
-      }
-      setRows(floors.map((floor) => ({ floor, checked: true, name: defaultDisplayName(floor) })));
-      setLoad({ status: "ready" });
+      applyDetectedFloors(await extractFloorsFromPdf(file));
     } catch (err) {
       setLoad({
         status: "error",
         message: err instanceof Error ? `שגיאה בקריאת הקובץ: ${err.message}` : "שגיאה לא צפויה בקריאת הקובץ.",
+      });
+    }
+  }
+
+  async function handleOneDrivePick() {
+    setLoad({ status: "parsing" });
+    try {
+      const picked = await openOneDriveFilePicker(["pdf"]);
+      const bytes = await downloadPickedFile(picked);
+      applyDetectedFloors(await extractFloorsFromPdfBytes(new Uint8Array(bytes)));
+    } catch (err) {
+      if (err instanceof FilePickerCancelledError) {
+        setLoad({ status: "idle" });
+        return;
+      }
+      setLoad({
+        status: "error",
+        message: err instanceof Error ? `שגיאה בייבוא מ-OneDrive: ${err.message}` : "שגיאה לא צפויה בייבוא מ-OneDrive.",
       });
     }
   }
@@ -98,7 +129,7 @@ export function FloorImportModal({ projectId, onClose }: { projectId: string; on
               אוטומטית. הקובץ עצמו לא נשמר בשום מקום, רק הקומות שתאשר.
             </p>
             <button type="button" className={styles.pickButton} onClick={() => fileInputRef.current?.click()}>
-              📄 בחר קובץ PDF…
+              📄 בחר קובץ PDF מהמכשיר…
             </button>
             <input
               ref={fileInputRef}
@@ -111,6 +142,22 @@ export function FloorImportModal({ projectId, onClose }: { projectId: string; on
                 if (file) void handleFileChosen(file);
               }}
             />
+            {ONEDRIVE_PICKER_CONFIGURED ? (
+              <button
+                type="button"
+                className={styles.pickButton}
+                style={{ marginTop: 10 }}
+                onClick={() => void handleOneDrivePick()}
+              >
+                📤 ייבוא מ-OneDrive…
+              </button>
+            ) : (
+              <p className={styles.hint} style={{ marginTop: 10 }}>
+                ייבוא ישירות מ-OneDrive עדיין לא זמין — חסרה הגדרה חד-פעמית של Microsoft Entra (ראה
+                apps/web/lib/graph-picker/msal-client.ts). אפשר להשתמש בינתיים בבחירת קובץ מהמכשיר למעלה —
+                אם ה-OneDrive מסונכרן למכשיר, הקבצים שלו יופיעו שם כרגיל.
+              </p>
+            )}
             {load.status === "error" ? <p className={styles.error}>{load.message}</p> : null}
           </>
         ) : null}

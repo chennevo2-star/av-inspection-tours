@@ -64,15 +64,14 @@ export function detectFloorsFromTextItems(items: PositionedText[]): DetectedFloo
 }
 
 /**
- * Loads a PDF file and extracts every page's positioned text via PDF.js, then runs the layout logic
- * above. Runs entirely client-side (no upload, no server round-trip) -- consistent with the app's
- * offline-first mandate, and the source PDF never needs to be stored anywhere for this one-time import.
+ * Extracts every page's positioned text from raw PDF bytes via PDF.js, then runs the layout logic above.
+ * Runs entirely client-side -- the source PDF never needs to be stored anywhere for this one-time import,
+ * whichever way its bytes were obtained (a local file, or downloaded from a picked OneDrive item).
  */
-export async function extractFloorsFromPdf(file: File): Promise<DetectedFloor[]> {
+export async function extractFloorsFromPdfBytes(data: Uint8Array): Promise<DetectedFloor[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
-  const data = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjs.getDocument({ data }).promise;
 
   const allFloors: DetectedFloor[] = [];
@@ -88,4 +87,10 @@ export async function extractFloorsFromPdf(file: File): Promise<DetectedFloor[]>
     allFloors.push(...detectFloorsFromTextItems(items));
   }
   return allFloors;
+}
+
+/** Convenience wrapper for the common case (a locally-picked file) -- see extractFloorsFromPdfBytes for
+ * anything already in memory as bytes (e.g. a file downloaded from OneDrive). */
+export async function extractFloorsFromPdf(file: File): Promise<DetectedFloor[]> {
+  return extractFloorsFromPdfBytes(new Uint8Array(await file.arrayBuffer()));
 }
