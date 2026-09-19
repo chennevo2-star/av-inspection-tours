@@ -19,6 +19,7 @@
     "@types/node": "^20.14.0",
     "jszip": "^3.10.1",
     "unpdf": "^1.8.1",
-    "@embedpdf/fonts-hebrew": "^1.0.0"
+    "@embedpdf/fonts-hebrew": "^1.0.0",
+    "pdfjs-dist": "^6.3.289"
   }
 }

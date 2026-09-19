@@ -1,8 +1,60 @@
 import { describe, expect, it } from "vitest";
 import { extractText, getDocumentProxy } from "unpdf";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { buildInspectionReportPdf, packPdfToBuffer, buildInspectionReportDocument, packToBuffer } from "../src/index.js";
 import { computeColumnBoxes, CONTENT_LEFT, CONTENT_RIGHT } from "../src/build-pdf.js";
 import type { InspectionReportData } from "../src/types.js";
+
+const execFileAsync = promisify(execFile);
+const EXTRACT_SCRIPT = fileURLToPath(new URL("./extract-pdf-text-items.mjs", import.meta.url));
+
+/**
+ * Real x-coordinate extraction via pdfjs-dist, NOT `unpdf`'s `extractText` (used elsewhere in this file)
+ * -- deliberately a second, independent reader. `extractText`-style presence checks (`.toContain(word)`)
+ * can't catch a word-ORDER bug at all, since reordering never changes which characters exist, only where
+ * they're drawn -- this is exactly the gap that let the real 2026-09-19 RTL-order regression ship
+ * undetected by this same test file's earlier assertions. Visual/rendered-image inspection was tried and
+ * repeatedly gave wrong answers during that investigation (see build-pdf.ts's own `toVisualOrder`
+ * comment) -- exact coordinates are the only method that held up. Runs pdfjs-dist in a real child `node`
+ * process (extract-pdf-text-items.mjs), not in-process -- see that script's own comment for why (a
+ * Vitest/Worker interaction, not a real bug).
+ */
+async function extractTextItems(buffer: Buffer): Promise<{ str: string; x: number }[]> {
+  const dir = await mkdtemp(path.join(tmpdir(), "av-inspection-pdf-verify-"));
+  const pdfPath = path.join(dir, "report.pdf");
+  try {
+    await writeFile(pdfPath, buffer);
+    const { stdout } = await execFileAsync(process.execPath, [EXTRACT_SCRIPT, pdfPath]);
+    return JSON.parse(stdout) as { str: string; x: number }[];
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Whether `needle` appears in ANY single extracted text item — a presence check that doesn't care about
+ * order. Deliberately does NOT use `extractPdfText`'s `unpdf`-based whole-string concatenation for this:
+ * once `toVisualOrder` correctly reorders same-script runs for real RTL rendering, unpdf's own
+ * content-stream-order extraction shows those same runs BACK in reversed/visual order too (it has no
+ * bidi-aware reassembly of its own) -- so a multi-word LOGICAL-order phrase like "אבי לוי" or "קומת קרקע"
+ * legitimately stops being one contiguous substring in unpdf's output, even though the PDF renders
+ * correctly. A single word/run, checked per-item here, is unaffected by that. */
+function hasText(items: { str: string; x: number }[], needle: string): boolean {
+  return items.some((it) => it.str.includes(needle));
+}
+
+/** The x position of the FIRST occurrence of `needle` among extracted text items (throws if absent —
+ * a missing word is a distinct failure from a misordered one, and should fail loudly, not as `undefined`
+ * comparisons that could accidentally pass). */
+function xOf(items: { str: string; x: number }[], needle: string): number {
+  const found = items.find((it) => it.str.includes(needle));
+  if (!found) throw new Error(`"${needle}" not found in extracted text items`);
+  return found.x;
+}
 
 // Real, fully-decodable 4x4 JPEG/PNG bytes (generated with Pillow during this task's own research, not
 // hand-waved magic-byte stubs). This matters here in a way it doesn't for build-docx.test.ts's FAKE_JPEG:
@@ -86,16 +138,44 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(buffer.length).toBeGreaterThan(1000);
   });
 
-  it("renders Hebrew text in plain logical order, extractable via a real ToUnicode CMap", async () => {
+  it("renders Hebrew text extractable via a real ToUnicode CMap", async () => {
     const doc = await buildInspectionReportPdf(sampleData({ inspectorName: "אבי לוי" }));
     const buffer = await packPdfToBuffer(doc);
-    const text = await extractPdfText(buffer);
+    const items = await extractTextItems(buffer);
 
-    // @pdf-lib/fontkit's real font/shaping layer renders Hebrew correctly from plain logical-order text
-    // handed to page.drawText -- no manual bidi reversal (see build-pdf.ts's own `toVisualOrder`
-    // comment for how a manual reversal step was tried, found to double-flip already-correct output,
-    // and removed, verified against a real LibreOffice-rendered reference).
-    expect(text).toContain("אבי לוי");
+    expect(hasText(items, "אבי")).toBe(true);
+    expect(hasText(items, "לוי")).toBe(true);
+  });
+
+  it("lays out multi-word Hebrew text in real RTL visual order, not left-to-right typing order (real production bug, 2026-09-19: a screenshot of an actual exported report showed word order reversed/LTR -- root-caused via these exact x-coordinates, see build-pdf.ts's own toVisualOrder comment)", async () => {
+    const doc = await buildInspectionReportPdf(
+      sampleData({ tasks: [], generalText: "לשנאל מימין ולמסך משמאל", summaryText: "", participants: [] })
+    );
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    // Reading order for Hebrew is right-to-left, i.e. DEscending x as you read forward -- so each later
+    // word in the logical string must sit at a LOWER x (further left on the page) than the one before it.
+    const xLashanal = xOf(items, "לשנאל");
+    const xMimin = xOf(items, "מימין");
+    const xMask = xOf(items, "ולמסך");
+    const xMismol = xOf(items, "משמאל");
+    expect(xLashanal).toBeGreaterThan(xMimin);
+    expect(xMimin).toBeGreaterThan(xMask);
+    expect(xMask).toBeGreaterThan(xMismol);
+  });
+
+  it("keeps a Hebrew+English label:value line in correct RTL order (metadata line, real production shape: \"פרויקט: B2tech\")", async () => {
+    const doc = await buildInspectionReportPdf(sampleData({ projectName: "B2tech" }));
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    // "פרויקט" (label) must render to the RIGHT of "B2tech" (its value) -- reading right-to-left, the
+    // label comes first. A word-order bug would put B2tech on the right instead. Matches ": B2tech"
+    // specifically (not the bare project name, which also appears later in the page footer).
+    const xLabel = xOf(items, "פרויקט");
+    const xValue = xOf(items, ": B2tech");
+    expect(xLabel).toBeGreaterThan(xValue);
   });
 
   it("keeps mixed Hebrew+English tokens (Crestron, Poly) intact and un-reversed (REPORTING.md's mixed-content requirement)", async () => {
@@ -108,6 +188,20 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(text).toContain("Crestron");
     expect(text).toContain("Poly");
     expect(text).toContain("Biocatch"); // the project name, also pure-Latin
+  });
+
+  it("lays out a task table cell's mixed Hebrew+English description in real RTL visual order", async () => {
+    const doc = await buildInspectionReportPdf(sampleData());
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    // sampleData's first task description is "בעיית Crestron בחיבור." -- reading right-to-left: בעיית
+    // (word 1, rightmost) then Crestron then בחיבור (word 3, leftmost).
+    const xWord1 = xOf(items, "בעיית");
+    const xCrestron = xOf(items, "Crestron");
+    const xWord3 = xOf(items, "בחיבור");
+    expect(xWord1).toBeGreaterThan(xCrestron);
+    expect(xCrestron).toBeGreaterThan(xWord3);
   });
 
   it("lays out the task table RTL: the first-authored column (number) sits at the right edge, the last (status) at the left (user report, 2026-09-19: 'the table needs to be RTL')", () => {
@@ -149,8 +243,9 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     // Adding a stamp adds one more real image XObject (the task's own JPEG photo is present in both).
     expect(countImageXObjects(withStamp)).toBeGreaterThan(countImageXObjects(withoutStamp));
 
-    const textWithStamp = await extractPdfText(withStamp);
-    expect(textWithStamp).toContain("אבי לוי");
+    const itemsWithStamp = await extractTextItems(withStamp);
+    expect(hasText(itemsWithStamp, "אבי")).toBe(true);
+    expect(hasText(itemsWithStamp, "לוי")).toBe(true);
   });
 
   it("prints neither a name nor an image when the tour had no bank-picked inspector at all (no-mock-success: never fakes one)", async () => {
@@ -177,8 +272,9 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const buffer = await packPdfToBuffer(doc);
     expect(buffer.length).toBeGreaterThan(500);
 
-    const text = await extractPdfText(buffer);
-    expect(text).toContain("לא נרשמו משימות בסיור זה.");
+    const items = await extractTextItems(buffer);
+    expect(hasText(items, "נרשמו")).toBe(true);
+    expect(hasText(items, "משימות")).toBe(true);
   });
 });
 
@@ -214,7 +310,7 @@ describe("DOCX and PDF stay factually in sync from the same InspectionReportData
   it("both outputs contain the same task facts: count, keywords, room/floor names, inspector name", async () => {
     const docxBuffer = await packToBuffer(buildInspectionReportDocument(shared));
     const pdfBuffer = await packPdfToBuffer(await buildInspectionReportPdf(shared));
-    const pdfText = await extractPdfText(pdfBuffer);
+    const pdfItems = await extractTextItems(pdfBuffer);
 
     // DOCX: verified the same way build-docx.test.ts already does (raw OOXML string containment).
     const JSZip = (await import("jszip")).default;
@@ -223,17 +319,22 @@ describe("DOCX and PDF stay factually in sync from the same InspectionReportData
     // Task count: exactly 2 distinctive keywords, one per task, in BOTH outputs.
     for (const keyword of ["HDMI", "Poly"]) {
       expect(docxXml).toContain(keyword);
-      expect(pdfText).toContain(keyword);
+      expect(hasText(pdfItems, keyword)).toBe(true);
     }
 
-    // Room/floor names present in both, same plain logical-order text.
+    // Room/floor names present in both -- checked per-word on the PDF side ("קומת קרקע" is two Hebrew
+    // words; correct RTL rendering draws them as separate visually-reordered runs, see hasText's own
+    // comment, so it's the WORDS that must be present, not that exact two-word substring).
     for (const label of ["קומת קרקע", "עליונה", "לובי", "מטבח"]) {
       expect(docxXml).toContain(label);
-      expect(pdfText).toContain(label);
+    }
+    for (const word of ["קומת", "קרקע", "עליונה", "לובי", "מטבח"]) {
+      expect(hasText(pdfItems, word)).toBe(true);
     }
 
     // Inspector name present in both.
     expect(docxXml).toContain("אבי לוי");
-    expect(pdfText).toContain("אבי לוי");
+    expect(hasText(pdfItems, "אבי")).toBe(true);
+    expect(hasText(pdfItems, "לוי")).toBe(true);
   });
 });
