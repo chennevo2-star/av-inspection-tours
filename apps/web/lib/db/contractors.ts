@@ -1,6 +1,7 @@
 import { Contractor, ContractorAlias } from "@av-inspection/shared-types";
 import { getLocalDb } from "./local-db";
 import { enqueueSync } from "../sync/enqueue";
+import { upsertContractorBankEntryByName } from "./contractor-bank";
 
 export interface CreateContractorInput {
   companyName: string;
@@ -23,6 +24,9 @@ export async function createContractor(projectId: string, input: CreateContracto
   });
   await getLocalDb().contractors.add(contractor);
   await enqueueSync("Contractor", contractor.id, "create", contractor);
+  // User request: a contractor added to a project also enters the cross-project bank, so the next
+  // project can pick it instead of retyping — see contractor-bank.ts's own comment for the dedup rule.
+  await upsertContractorBankEntryByName(input);
   return contractor;
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import type { Contractor, ContractorAlias } from "@av-inspection/shared-types";
+import type { Contractor, ContractorAlias, ContractorBankEntry } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
 import {
   addContractorAlias,
@@ -10,10 +10,16 @@ import {
   deleteContractor,
   deleteContractorAlias,
 } from "../../../lib/db/contractors";
+import { listContractorBank } from "../../../lib/db/contractor-bank";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import styles from "./project-screen.module.css";
 
-/** Contractors + aliases (spec §Contractor, §25). Live-queried straight from IndexedDB. */
+/**
+ * Contractors + aliases (spec §Contractor, §25). Live-queried straight from IndexedDB. Offers the
+ * cross-project bank (user request: "בפרויקט ניתן לבחור מרשימת קבלנים או להוסיף קבלן חדש") as quick-pick
+ * chips above the add form — clicking one pre-fills the form rather than adding directly, so the user can
+ * still adjust the field/discipline for this specific project before confirming.
+ */
 export function ContractorsSection({ projectId }: { projectId: string }) {
   const mounted = useMounted();
   const [companyName, setCompanyName] = useState("");
@@ -27,6 +33,26 @@ export function ContractorsSection({ projectId }: { projectId: string }) {
         : Promise.resolve<Contractor[]>([]),
     [mounted, projectId]
   );
+
+  const bank = useLiveQuery(
+    () => (mounted ? listContractorBank() : Promise.resolve<ContractorBankEntry[]>([])),
+    [mounted]
+  );
+
+  // Companies already added to THIS project don't need to be offered again as quick-pick chips.
+  const alreadyAdded = useMemo(
+    () => new Set((contractors ?? []).map((c) => c.companyName)),
+    [contractors]
+  );
+  const bankOptions = useMemo(
+    () => (bank ?? []).filter((entry) => !alreadyAdded.has(entry.companyName)),
+    [bank, alreadyAdded]
+  );
+
+  function handlePickFromBank(entry: ContractorBankEntry) {
+    setCompanyName(entry.companyName);
+    setField(entry.field ?? "");
+  }
 
   async function handleAdd(event: FormEvent) {
     event.preventDefault();
@@ -45,6 +71,21 @@ export function ContractorsSection({ projectId }: { projectId: string }) {
   return (
     <section className={styles.section}>
       <h2 className={styles.sectionTitle}>קבלנים</h2>
+
+      {bankOptions.length > 0 ? (
+        <div className={styles.aliasRow} style={{ marginBottom: 10 }}>
+          {bankOptions.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              className={styles.aliasChip}
+              onClick={() => handlePickFromBank(entry)}
+            >
+              + {entry.companyName}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <form className={styles.inlineForm} onSubmit={handleAdd}>
         <input

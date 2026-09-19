@@ -135,6 +135,29 @@ export const ContractorAlias = z.object({
 });
 export type ContractorAlias = z.infer<typeof ContractorAlias>;
 
+/**
+ * A cross-project "bank" of companies previously used as a Contractor on ANY project (session's user
+ * request: adding a contractor to one project should also make it pickable on the next one, instead of
+ * retyping the same company from scratch every time) -- same role for contractors that `Inspector` above
+ * already plays for supervisors, and the same reasoning for why it's local-only (no SyncEntityType/server
+ * table): it's a convenience autocomplete list, not itself a business record anything else references.
+ * The REAL, synced business record stays the per-project `Contractor` row (own id, own
+ * Issue.responsibleContractorId references, etc.) -- adding a project's contractor from the bank just
+ * pre-fills a brand new `Contractor` row from this entry, it never reuses the bank entry's own id.
+ * Deduplicated by `companyName` (createContractor()'s own upsert, see contractor-bank.ts) -- keeps this a
+ * plain "have we used this company before" list rather than a fully managed directory.
+ */
+export const ContractorBankEntry = z.object({
+  id: uuid(),
+  companyName: z.string().min(1),
+  field: z.string().nullable().default(null),
+  contactName: z.string().nullable().default(null),
+  phone: z.string().nullable().default(null),
+  email: z.string().nullable().default(null),
+  createdAt: isoDateTime().default(() => new Date().toISOString()),
+});
+export type ContractorBankEntry = z.infer<typeof ContractorBankEntry>;
+
 /* ------------------------------------------------------------------------------------------------
  * Inspector (session's user request — a reusable "bank" of supervisors/inspectors, each with an
  * embeddable stamp image that appears on a generated report's closing page). Cross-project (like the

@@ -5,6 +5,7 @@ import type {
   AudioChunk,
   Contractor,
   ContractorAlias,
+  ContractorBankEntry,
   ContextEvent,
   Floor,
   Inspection,
@@ -55,6 +56,7 @@ export class LocalDb extends Dexie {
   rooms!: Table<Room, string>;
   contractors!: Table<Contractor, string>;
   contractorAliases!: Table<ContractorAlias, string>;
+  contractorBank!: Table<ContractorBankEntry, string>;
   inspections!: Table<Inspection, string>;
   contextEvents!: Table<ContextEvent, string>;
   issues!: Table<Issue, string>;
@@ -167,6 +169,35 @@ export class LocalDb extends Dexie {
       rooms: "id, floorId",
       contractors: "id, projectId",
       contractorAliases: "id, contractorId, alias",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      inspectors: "id, name",
+      inspectorStampBlobs: "id",
+      attachments: "id, inspectionId, floorId, roomId, taskId, syncStatus",
+      attachmentBlobs: "id",
+      settings: "key",
+      syncMetadata: "key, projectId, entityType",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
+    // v6 (session's user request): a cross-project contractor "bank", same role ContractorBankEntry's own
+    // doc comment describes Inspector already playing for supervisors -- adding a contractor to one
+    // project also registers it here so the next project can pick it instead of retyping. Local-only, same
+    // reasoning as `inspectors` above (see ContractorBankEntry's own comment in shared-types).
+    this.version(6).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      contractorBank: "id, companyName",
       inspections: "id, projectId, status, endTime",
       contextEvents: "id, inspectionId, sequence, timestamp",
       issues: "id, inspectionId, projectId, roomId, status, syncStatus",

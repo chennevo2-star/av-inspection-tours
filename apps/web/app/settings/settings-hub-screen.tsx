@@ -48,6 +48,16 @@ export function SettingsHubScreen() {
             <span aria-hidden="true">←</span>
           </Link>
         </li>
+        <li>
+          <Link href="/contractors" className={styles.row}>
+            <span className={styles.rowIcon}>🏗️</span>
+            <span className={styles.rowText}>
+              <span className={styles.rowLabel}>רשימת קבלנים</span>
+              <span className={styles.rowHint}>הוספה, עריכה והסרה של קבלנים בבנק המשותף</span>
+            </span>
+            <span aria-hidden="true">←</span>
+          </Link>
+        </li>
       </ul>
     </main>
   );
