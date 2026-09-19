@@ -29,9 +29,46 @@ async function loadLogo(): Promise<ReportPhoto | null> {
   }
 }
 
+// Every report photo displays at a small fixed size regardless of format (build-docx.ts's own
+// transformation widths top out at 130pt; build-pdf.ts's PHOTO_BOX is 55pt) -- a full camera-resolution
+// photo (often several MB, 3000px+) carries no visible benefit there, only cost. That cost turned into a
+// real production bug (user report, 2026-09-19): PDF generation runs server-side on Cloudflare Workers
+// (unlike DOCX, which builds entirely client-side, see report-screen.tsx), and decoding/re-embedding
+// several full-resolution JPEGs there was enough to exceed the Worker's CPU/memory limits and fail with a
+// real HTTP 503 -- a genuinely reported failure with real inspection photos, not a synthetic one. Confirmed
+// via apps/web/lib/db/photos.ts's own doc comment: no client-side compression exists yet at capture time.
+const MAX_REPORT_PHOTO_DIMENSION = 1200;
+const REPORT_PHOTO_JPEG_QUALITY = 0.8;
+
+/** Downscales a photo before it ever reaches a report (see the comment above) -- always converts to JPEG
+ * (report photos don't need lossless fidelity or PNG transparency at this size), and falls back to the
+ * original blob untouched if resizing fails for any reason (an unsupported API, a decode error, ...) --
+ * this must never be the reason a report fails to generate, only ever a size optimization. */
+async function resizePhotoForReport(blob: Blob): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      const scale = Math.min(1, MAX_REPORT_PHOTO_DIMENSION / Math.max(bitmap.width, bitmap.height));
+      if (scale === 1) return blob; // already small enough -- skip a pointless re-encode
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return blob;
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      return await canvas.convertToBlob({ type: "image/jpeg", quality: REPORT_PHOTO_JPEG_QUALITY });
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return blob;
+  }
+}
+
 async function blobToReportPhoto(blob: Blob): Promise<ReportPhoto> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  return { bytes, mimeType: blob.type || "image/jpeg" };
+  const resized = await resizePhotoForReport(blob);
+  const bytes = new Uint8Array(await resized.arrayBuffer());
+  return { bytes, mimeType: resized.type || "image/jpeg" };
 }
 
 /**
