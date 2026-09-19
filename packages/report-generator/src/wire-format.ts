@@ -68,10 +68,24 @@ export function serializeReportDataForWire(data: InspectionReportData): WireInsp
   };
 }
 
-/** Server-side: call on the parsed JSON body before handing it to any builder. */
+/**
+ * Server-side: call on the parsed JSON body before handing it to any builder.
+ *
+ * `reportSubtitle` defaults when missing (real production bug, 2026-09-19: "יצירת PDF נכשלה: a3 is not
+ * iterable" -- a real user's real export crashed the moment `reportSubtitle` was added to
+ * `InspectionReportData`). Root cause: this is a PWA with a service worker caching the client bundle: a
+ * device whose cache hadn't picked up the new client code yet kept building requests with the OLD
+ * `assembleReportData()`, which never knew this field existed, so the server received a body with no
+ * `reportSubtitle` key at all. `data.tourName`/`data.tasks`/etc. don't need the same guard -- they existed
+ * before this field did, so a stale-but-not-ancient client still sends them correctly; `reportSubtitle`
+ * is the one genuinely new field a real stale client can still be missing. Client/server version skew is
+ * inherent to how PWAs cache and update, not a one-off -- this must degrade gracefully, never crash the
+ * whole export over one missing display string.
+ */
 export function deserializeReportDataFromWire(data: WireInspectionReportData): InspectionReportData {
   return {
     ...data,
+    reportSubtitle: data.reportSubtitle || "דו״ח פיקוח עליון – מערכות מולטימדיה",
     logo: data.logo ? photoFromWire(data.logo) : null,
     inspectorStamp: data.inspectorStamp ? photoFromWire(data.inspectorStamp) : null,
     tasks: data.tasks.map((task) => ({ ...task, photos: task.photos.map(photoFromWire) })),

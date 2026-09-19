@@ -80,4 +80,14 @@ describe("serializeReportDataForWire / deserializeReportDataFromWire", () => {
 
     expect(Array.from(restored.tasks[0]!.photos[0]!.bytes)).toEqual(Array.from(big));
   });
+
+  it("defaults reportSubtitle instead of crashing when a stale client's request body doesn't have it at all (real production bug, 2026-09-19: \"a3 is not iterable\" -- a PWA's cached old client bundle sent a body from before this field existed)", () => {
+    const wire = JSON.parse(JSON.stringify(serializeReportDataForWire(sampleData())));
+    delete wire.reportSubtitle; // simulates the exact real stale-client wire shape: the key is absent
+    expect(wire.reportSubtitle).toBeUndefined();
+
+    const restored = deserializeReportDataFromWire(wire);
+
+    expect(restored.reportSubtitle).toBe("דו״ח פיקוח עליון – מערכות מולטימדיה");
+  });
 });
