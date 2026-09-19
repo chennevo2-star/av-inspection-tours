@@ -184,6 +184,34 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(xLabel).toBeGreaterThan(xValue);
   });
 
+  it("puts the cover title's date at the true leftmost position even when the project name is in English (user report, 2026-09-19: date wasn't consistently 'last' depending on the project name's script)", async () => {
+    const doc = await buildInspectionReportPdf(
+      sampleData({ tourName: "טופס פיקוח עליון מולטימדיה B2tech 19.09.2026" })
+    );
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    const xDate = xOf(items, "19.09.2026");
+    // Every other word on the title's own line (same y) must sit to the date's right -- the date is the
+    // line's true leftmost/last element, not sandwiched between the English project name and the rest.
+    const titleWords = ["טופס", "פיקוח", "עליון", "מולטימדיה", "B2tech"];
+    for (const word of titleWords) {
+      expect(xOf(items, word)).toBeGreaterThan(xDate);
+    }
+  });
+
+  it("puts the cover title's date at the true leftmost position with an all-Hebrew project name too (same guarantee, opposite script)", async () => {
+    const doc = await buildInspectionReportPdf(sampleData({ tourName: "טופס פיקוח עליון מולטימדיה פרויקט א 19.09.2026" }));
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    const xDate = xOf(items, "19.09.2026");
+    const titleWords = ["טופס", "פיקוח", "עליון", "מולטימדיה", "פרויקט"];
+    for (const word of titleWords) {
+      expect(xOf(items, word)).toBeGreaterThan(xDate);
+    }
+  });
+
   it("keeps mixed Hebrew+English tokens (Crestron, Poly) intact and un-reversed (REPORTING.md's mixed-content requirement)", async () => {
     const doc = await buildInspectionReportPdf(sampleData());
     const buffer = await packPdfToBuffer(doc);

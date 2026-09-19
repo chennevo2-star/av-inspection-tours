@@ -396,6 +396,51 @@ function formatDateLabel(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString("he-IL", { year: "numeric", month: "long", day: "numeric" });
 }
 
+// Matches the trailing " DD.MM.YYYY" apps/web's formatTourName() always appends (its own toLocaleDateString
+// with { year: "numeric", month: "2-digit", day: "2-digit" }).
+const TOUR_NAME_DATE_SUFFIX = /\s(\d{2}\.\d{2}\.\d{4})$/;
+
+/**
+ * Draws the cover title as ONE bidi-reordered run when it's all-Hebrew, but splits the trailing date off
+ * and positions it separately when it isn't (real bug found here, user report, 2026-09-19: "the date
+ * should always come last regardless of whether the project name is English or Hebrew"). Root cause:
+ * `toVisualOrder`'s run-reversal (see its own comment) is correct bidi behavior for ADJACENT same-
+ * direction content, which is exactly the problem -- an English project name immediately followed by the
+ * date (also non-Hebrew: digits + dots) merges into ONE combined LTR run, and only the run as a WHOLE gets
+ * repositioned; nothing reorders the project name and date RELATIVE to each other within it, so the date
+ * ends up sandwiched next to the project name instead of at the line's true left/last edge. A Hebrew
+ * project name never hits this: it stays part of the preceding Hebrew run, so the trailing date is
+ * already its own isolated non-Hebrew run and lands correctly. This function makes both cases behave the
+ * same way explicitly, rather than relying on where a script boundary happens to fall.
+ */
+function drawCoverTitle(page: PDFPage, tourName: string, box: { left: number; right: number }, y: number, size: number, fonts: FontSet): void {
+  const match = tourName.match(TOUR_NAME_DATE_SUFFIX);
+  if (!match || match.index === undefined) {
+    // Defensive fallback (e.g. a tourName shape this regex doesn't recognize) -- never crash, just fall
+    // back to plain single-run bidi reordering, same as before this fix existed.
+    drawAlignedLine(page, tourName, box, y, size, fonts, { bold: true, color: DARK_TEXT, align: "center" });
+    return;
+  }
+
+  const datePart = match[1]!;
+  const titlePart = tourName.slice(0, match.index);
+  // A visibly wider gap than a plain space -- besides reading better (the date is meant to stand apart,
+  // not just barely clear of the last word), a single-space gap here was found to make pdfjs-dist's own
+  // getTextContent() merge the date and the next run into one reported text item (a real, reproducible
+  // extraction-layer quirk, not a rendering bug: the glyphs themselves draw at the correct, distinct
+  // positions either way) -- see build-pdf.test.ts's own regression test for this exact case.
+  const gapWidth = fontFor(fonts, false, true).widthOfTextAtSize(" ", size) * 2.5;
+  const titleWidth = measureWidth(titlePart, size, fonts, true);
+  const dateWidth = measureWidth(datePart, size, fonts, true);
+  const totalWidth = titleWidth + gapWidth + dateWidth;
+  const startX = box.left + (box.right - box.left - totalWidth) / 2;
+
+  // The date is drawn first (leftmost -- the line's true "last" position for RTL reading), the rest of
+  // the title immediately to its right, ending at the block's right edge -- always, regardless of script.
+  drawVisualLine(page, datePart, startX, y, size, fonts, true, DARK_TEXT);
+  drawVisualLine(page, toVisualOrder(titlePart), startX + dateWidth + gapWidth, y, size, fonts, true, DARK_TEXT);
+}
+
 function drawCover(cursor: Cursor, fonts: FontSet, data: InspectionReportData, logoImage: PDFImage | null): void {
   if (logoImage) {
     const dims = logoImage.scaleToFit(140, 70);
@@ -410,15 +455,7 @@ function drawCover(cursor: Cursor, fonts: FontSet, data: InspectionReportData, l
   }
 
   const dateLabel = formatDateLabel(data.inspectionDate);
-  drawAlignedLine(
-    cursor.page,
-    data.tourName,
-    { left: CONTENT_LEFT, right: CONTENT_RIGHT },
-    cursor.y,
-    18,
-    fonts,
-    { bold: true, color: DARK_TEXT, align: "center" }
-  );
+  drawCoverTitle(cursor.page, data.tourName, { left: CONTENT_LEFT, right: CONTENT_RIGHT }, cursor.y, 18, fonts);
   cursor.y -= 26;
 
   drawAlignedLine(cursor.page, "דו״ח פיקוח עליון – מערכות מולטימדיה", { left: CONTENT_LEFT, right: CONTENT_RIGHT }, cursor.y, 12, fonts, {
