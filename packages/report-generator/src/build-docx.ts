@@ -37,6 +37,7 @@ interface RunStyle {
   italics?: boolean;
   size?: number; // half-points (docx convention) — e.g. 24 = 12pt
   color?: string; // hex, no '#'
+  break?: number; // real line breaks (<w:br/>) inserted before this run — see textCell's own comment
 }
 
 function rtlRun(text: string, style: RunStyle = {}): TextRun {
@@ -60,8 +61,21 @@ function bodyCell(children: Paragraph[], widthPercent: number): TableCell {
   });
 }
 
+/**
+ * A literal "\n" inside a plain TextRun's `text` does NOT render as a line break in OOXML -- Word only
+ * breaks a line on an explicit `<w:br/>` (here, `TextRun`'s own `break` option, which the `docx` package
+ * renders as one). Real bug found here (user request, 2026-09-19: each contractor should get its own
+ * line in the "באחריות" cell when a task has several) -- assemble-report-data.ts newline-joins multiple
+ * responsible parties into one string, and without this, that string rendered as one run of literal `\n`
+ * characters Word just drops, collapsing every name onto a single line. Splits on "\n" into one run per
+ * line, each subsequent run preceded by a real break -- general to any multi-line cell text, not just
+ * this one column (a multi-line task description, typed with real newlines in the wizard's textarea, was
+ * silently collapsing here too before this fix).
+ */
 function textCell(text: string, widthPercent: number): TableCell {
-  return bodyCell([rtlParagraph({ alignment: AlignmentType.START, children: [rtlRun(text || "—", { size: 20 })] })], widthPercent);
+  const lines = (text || "—").split("\n");
+  const runs = lines.map((line, index) => rtlRun(line, { size: 20, break: index > 0 ? 1 : undefined }));
+  return bodyCell([rtlParagraph({ alignment: AlignmentType.START, children: runs })], widthPercent);
 }
 
 // Narrowed to just the two variants this file ever produces (never "svg") — IImageOptions is a

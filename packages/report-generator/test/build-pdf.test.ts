@@ -13,24 +13,30 @@ import type { InspectionReportData } from "../src/types.js";
 const execFileAsync = promisify(execFile);
 const EXTRACT_SCRIPT = fileURLToPath(new URL("./extract-pdf-text-items.mjs", import.meta.url));
 
+interface TextItem {
+  str: string;
+  x: number;
+  y: number;
+}
+
 /**
- * Real x-coordinate extraction via pdfjs-dist, NOT `unpdf`'s `extractText` (used elsewhere in this file)
- * -- deliberately a second, independent reader. `extractText`-style presence checks (`.toContain(word)`)
- * can't catch a word-ORDER bug at all, since reordering never changes which characters exist, only where
- * they're drawn -- this is exactly the gap that let the real 2026-09-19 RTL-order regression ship
- * undetected by this same test file's earlier assertions. Visual/rendered-image inspection was tried and
- * repeatedly gave wrong answers during that investigation (see build-pdf.ts's own `toVisualOrder`
- * comment) -- exact coordinates are the only method that held up. Runs pdfjs-dist in a real child `node`
- * process (extract-pdf-text-items.mjs), not in-process -- see that script's own comment for why (a
- * Vitest/Worker interaction, not a real bug).
+ * Real x/y-coordinate extraction via pdfjs-dist, NOT `unpdf`'s `extractText` (used elsewhere in this
+ * file) -- deliberately a second, independent reader. `extractText`-style presence checks
+ * (`.toContain(word)`) can't catch a word-ORDER bug at all, since reordering never changes which
+ * characters exist, only where they're drawn -- this is exactly the gap that let the real 2026-09-19
+ * RTL-order regression ship undetected by this same test file's earlier assertions. Visual/rendered-image
+ * inspection was tried and repeatedly gave wrong answers during that investigation (see build-pdf.ts's own
+ * `toVisualOrder` comment) -- exact coordinates are the only method that held up. Runs pdfjs-dist in a
+ * real child `node` process (extract-pdf-text-items.mjs), not in-process -- see that script's own comment
+ * for why (a Vitest/Worker interaction, not a real bug).
  */
-async function extractTextItems(buffer: Buffer): Promise<{ str: string; x: number }[]> {
+async function extractTextItems(buffer: Buffer): Promise<TextItem[]> {
   const dir = await mkdtemp(path.join(tmpdir(), "av-inspection-pdf-verify-"));
   const pdfPath = path.join(dir, "report.pdf");
   try {
     await writeFile(pdfPath, buffer);
     const { stdout } = await execFileAsync(process.execPath, [EXTRACT_SCRIPT, pdfPath]);
-    return JSON.parse(stdout) as { str: string; x: number }[];
+    return JSON.parse(stdout) as TextItem[];
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -43,14 +49,14 @@ async function extractTextItems(buffer: Buffer): Promise<{ str: string; x: numbe
  * bidi-aware reassembly of its own) -- so a multi-word LOGICAL-order phrase like "אבי לוי" or "קומת קרקע"
  * legitimately stops being one contiguous substring in unpdf's output, even though the PDF renders
  * correctly. A single word/run, checked per-item here, is unaffected by that. */
-function hasText(items: { str: string; x: number }[], needle: string): boolean {
+function hasText(items: TextItem[], needle: string): boolean {
   return items.some((it) => it.str.includes(needle));
 }
 
 /** The x position of the FIRST occurrence of `needle` among extracted text items (throws if absent —
  * a missing word is a distinct failure from a misordered one, and should fail loudly, not as `undefined`
  * comparisons that could accidentally pass). */
-function xOf(items: { str: string; x: number }[], needle: string): number {
+function xOf(items: TextItem[], needle: string): number {
   const found = items.find((it) => it.str.includes(needle));
   if (!found) throw new Error(`"${needle}" not found in extracted text items`);
   return found.x;
@@ -202,6 +208,40 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const xWord3 = xOf(items, "בחיבור");
     expect(xWord1).toBeGreaterThan(xCrestron);
     expect(xCrestron).toBeGreaterThan(xWord3);
+  });
+
+  it("puts each contractor in the responsible column on its own line (user request, 2026-09-19: newline-joined responsibleParty renders as separate lines, not one run of text)", async () => {
+    const doc = await buildInspectionReportPdf(
+      sampleData({
+        tasks: [
+          {
+            id: "task-multi",
+            friendlyNumber: 1,
+            floorName: null,
+            roomName: null,
+            description: "בדיקה",
+            // Deliberately two single-word names, not e.g. "קבלן א"/"קבלן ב" -- a name with an embedded
+            // space is itself split into separate visual-order runs by toVisualOrder/splitScriptRuns (the
+            // exact same mechanism this file's own RTL-order tests rely on), so it would never appear as
+            // one contiguous extracted string regardless of this fix; that's a property of multi-word
+            // text, not a symptom of the newline bug this test targets.
+            responsibleParty: "סינמה\nממטל",
+            status: "פתוח",
+            photos: [],
+          },
+        ],
+      })
+    );
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    const nameA = items.find((it) => it.str.includes("סינמה"));
+    const nameB = items.find((it) => it.str.includes("ממטל"));
+    if (!nameA || !nameB) throw new Error("expected both contractor names in the extracted text");
+    // Both names sit in the same column (same x) but on different lines (different y) -- if the newline
+    // had silently collapsed (the exact bug this guards), both names would merge into one text item/line.
+    expect(Math.abs(nameA.x - nameB.x)).toBeLessThan(1);
+    expect(nameA.y).not.toBeCloseTo(nameB.y, 1);
   });
 
   it("lays out the task table RTL: the first-authored column (number) sits at the right edge, the last (status) at the left (user report, 2026-09-19: 'the table needs to be RTL')", () => {

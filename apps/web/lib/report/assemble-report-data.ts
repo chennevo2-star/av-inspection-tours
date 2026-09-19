@@ -141,7 +141,9 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
         // Task.responsibleParties is an array (multiple contractors can share one task); the report
         // contract itself stays a single printable string -- joins here, at the presentation boundary,
         // so build-pdf.ts/build-docx.ts/build-xlsx.ts don't need to know about the underlying array.
-        responsibleParty: task.responsibleParties.length > 0 ? task.responsibleParties.join(", ") : null,
+        // Newline-joined (user request, 2026-09-19: each contractor gets its own line in the table cell),
+        // not comma-joined -- both renderers already wrap on "\n" as a paragraph break within one cell.
+        responsibleParty: task.responsibleParties.length > 0 ? task.responsibleParties.join("\n") : null,
         status: task.status,
         photos: resolvedPhotos.filter((p): p is ReportPhoto => p !== null),
       };

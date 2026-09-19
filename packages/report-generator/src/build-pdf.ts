@@ -753,6 +753,11 @@ export async function buildInspectionReportPdf(data: InspectionReportData): Prom
     cursor.y -= 15;
   }
 
+  // Extra breathing room specifically here (user request, 2026-09-19: the table's own bottom border sat
+  // too close to the "סיכום" heading right above it, reading as if they touched/overlapped) -- on top of
+  // drawHeading's own small pre-gap, not a replacement for it (that gap is shared by every heading, this
+  // one is deliberately just for the table -> summary transition).
+  cursor.y -= 18;
   drawHeading(cursor, fonts, "סיכום");
   drawParagraph(cursor, fonts, data.summaryText || "לא הוזן סיכום.");
   ensureRoom(cursor, 20);

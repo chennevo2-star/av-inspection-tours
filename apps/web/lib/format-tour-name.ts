@@ -1,10 +1,11 @@
 /**
- * Joins tour category names the way the user specified: a single category stays quoted on its own
- * ("מולטימדיה"), while two or more are joined unquoted with a trailing "ו" on the last one — standard
- * Hebrew list conjunction (e.g. "מולטימדיה וביטחון", or "מולטימדיה, תקשורת וביטחון" for three).
+ * Joins tour category names: no quotes around a single category (user request, 2026-09-19 — an earlier
+ * round had quoted a lone category, e.g. "מולטימדיה", which the user asked removed from the report's main
+ * heading); two or more are joined unquoted with a trailing "ו" on the last one — standard Hebrew list
+ * conjunction (e.g. "מולטימדיה וביטחון", or "מולטימדיה, תקשורת וביטחון" for three).
  */
 function formatCategoryList(categories: string[]): string {
-  if (categories.length === 1) return `"${categories[0]}"`;
+  if (categories.length === 1) return categories[0]!;
   const last = categories[categories.length - 1];
   const rest = categories.slice(0, -1);
   return `${rest.join(", ")} ו${last}`;

@@ -124,6 +124,34 @@ describe("buildInspectionReportDocument — real OOXML output, not HTML-as-.docx
     expect(xml).toContain("w:bidiVisual");
   });
 
+  it("renders a multi-contractor responsibleParty (newline-joined) as real Word line breaks, not literal \\n text (user request, 2026-09-19: each contractor gets its own line)", async () => {
+    const doc = buildInspectionReportDocument(
+      sampleData({
+        tasks: [
+          {
+            id: "task-multi",
+            friendlyNumber: 1,
+            floorName: "קומה 30",
+            roomName: "חדר ישיבות",
+            description: "בעיה",
+            responsibleParty: "קבלן א\nקבלן ב",
+            status: "פתוח",
+            photos: [],
+          },
+        ],
+      })
+    );
+    const buffer = await packToBuffer(doc);
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+
+    expect(xml).toContain("קבלן א");
+    expect(xml).toContain("קבלן ב");
+    // A real <w:br/> element between the two names -- a literal "\n" inside one run's text would NOT
+    // produce this and would silently collapse both names onto one line in Word.
+    expect(xml).toMatch(/<w:br\s*\/>/);
+  });
+
   it("embeds the task photo as a real image part in the zip", async () => {
     const doc = buildInspectionReportDocument(sampleData());
     const buffer = await packToBuffer(doc);

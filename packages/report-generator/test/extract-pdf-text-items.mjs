@@ -26,7 +26,7 @@ for (let p = 1; p <= doc.numPages; p++) {
   const page = await doc.getPage(p);
   const content = await page.getTextContent();
   for (const item of content.items) {
-    if (item.str && item.str.trim().length > 0) items.push({ str: item.str, x: item.transform[4] });
+    if (item.str && item.str.trim().length > 0) items.push({ str: item.str, x: item.transform[4], y: item.transform[5] });
   }
 }
 process.stdout.write(JSON.stringify(items));
