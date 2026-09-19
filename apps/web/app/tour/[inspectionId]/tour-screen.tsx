@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Inspection, Project } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
-import { endInspection } from "../../../lib/db/inspections";
+import { endInspection, reopenInspection } from "../../../lib/db/inspections";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import { NewTaskWizard } from "./new-task-wizard";
 import { TasksTable } from "./tasks-table";
@@ -56,6 +56,7 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
   const [participants, setParticipants] = useState(inspection.participants);
   const [ended, setEnded] = useState(inspection.endTime !== null);
   const [ending, setEnding] = useState(false);
+  const [reopening, setReopening] = useState(false);
 
   const project = useLiveQuery<Project | undefined>(
     () => getLocalDb().projects.get(inspection.projectId),
@@ -74,17 +75,31 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
     }
   }
 
+  async function handleReopen() {
+    setReopening(true);
+    try {
+      await reopenInspection(inspection.id);
+      setEnded(false);
+    } finally {
+      setReopening(false);
+    }
+  }
+
   if (ended) {
     return (
       <main className={styles.wrap}>
         <div className={styles.doneScreen}>
           <div className={styles.doneTitle}>✅ הסיור נשמר בהצלחה במכשיר</div>
           <p className={styles.doneHint}>
-            ניתן עדיין לייצא דו״ח סיכום מהסיור הזה. הסנכרון לענן יבוצע ברקע כשיש חיבור.
+            ניתן עדיין לייצא דו״ח סיכום מהסיור הזה, או לפתוח אותו מחדש כדי לערוך משימות. הסנכרון לענן יבוצע
+            ברקע כשיש חיבור.
           </p>
           <Link href={`/tour/${inspection.id}/report`} className={styles.doneButton} style={{ marginLeft: 10 }}>
             ייצוא דו״ח
           </Link>
+          <button className={styles.doneButton} onClick={handleReopen} disabled={reopening} style={{ marginLeft: 10 }}>
+            {reopening ? "פותח…" : "✏️ פתח לעריכה"}
+          </button>
           <Link href="/" className={styles.doneButton}>
             חזרה למסך הראשי
           </Link>

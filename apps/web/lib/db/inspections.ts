@@ -139,3 +139,26 @@ export async function endInspection(id: string): Promise<Inspection> {
   await enqueueSync("Inspection", id, "update", updated);
   return updated;
 }
+
+/**
+ * Reverses `endInspection` (user request: edit an old tour, not just export its report) — clears
+ * `endTime` back to null and reverts status to "בתהליך", which is all `tour-screen.tsx`'s `ActiveTour`
+ * needs to show the normal editable grid again for this inspection instead of the done-screen. Calling
+ * `endInspection` again afterward re-ends it exactly as before (a fresh `endTime`), so this is safe to
+ * cycle through more than once.
+ */
+export async function reopenInspection(id: string): Promise<Inspection> {
+  const db = getLocalDb();
+  const existing = await db.inspections.get(id);
+  if (!existing) throw new Error(`reopenInspection: inspection ${id} not found locally`);
+
+  const updated = Inspection.parse({
+    ...existing,
+    endTime: null,
+    status: "בתהליך",
+    syncStatus: existing.syncStatus === "SYNCED" ? "WAITING_FOR_SYNC" : existing.syncStatus,
+  });
+  await db.inspections.put(updated);
+  await enqueueSync("Inspection", id, "update", updated);
+  return updated;
+}

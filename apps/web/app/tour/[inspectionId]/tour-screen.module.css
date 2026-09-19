@@ -109,10 +109,18 @@
   background: var(--accent);
   color: white;
   text-decoration: none;
+  border: none;
   border-radius: 12px;
   padding: 14px 24px;
   font-size: 15px;
   font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.doneButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .hint {
