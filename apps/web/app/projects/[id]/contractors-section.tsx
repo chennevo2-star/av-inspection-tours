@@ -11,6 +11,7 @@ import {
   deleteContractorAlias,
 } from "../../../lib/db/contractors";
 import { listContractorBank } from "../../../lib/db/contractor-bank";
+import { CategoryPicker } from "../../../components/category-picker";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import styles from "./project-screen.module.css";
 
@@ -94,12 +95,7 @@ export function ContractorsSection({ projectId }: { projectId: string }) {
           onChange={(e) => setCompanyName(e.target.value)}
           aria-label="שם חברה"
         />
-        <input
-          placeholder="תחום (למשל: אינטגרטור AV, חשמל, נגרות)"
-          value={field}
-          onChange={(e) => setField(e.target.value)}
-          aria-label="תחום"
-        />
+        <CategoryPicker value={field} onChange={setField} />
         <button className={styles.addButton} type="submit" disabled={creating || !companyName.trim()}>
           הוסף קבלן
         </button>

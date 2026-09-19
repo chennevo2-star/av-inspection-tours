@@ -6,6 +6,7 @@ import type {
   Contractor,
   ContractorAlias,
   ContractorBankEntry,
+  ContractorCategory,
   ContextEvent,
   Floor,
   Inspection,
@@ -57,6 +58,7 @@ export class LocalDb extends Dexie {
   contractors!: Table<Contractor, string>;
   contractorAliases!: Table<ContractorAlias, string>;
   contractorBank!: Table<ContractorBankEntry, string>;
+  contractorCategories!: Table<ContractorCategory, string>;
   inspections!: Table<Inspection, string>;
   contextEvents!: Table<ContextEvent, string>;
   issues!: Table<Issue, string>;
@@ -198,6 +200,36 @@ export class LocalDb extends Dexie {
       contractors: "id, projectId",
       contractorAliases: "id, contractorId, alias",
       contractorBank: "id, companyName",
+      inspections: "id, projectId, status, endTime",
+      contextEvents: "id, inspectionId, sequence, timestamp",
+      issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+      tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+      notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+      photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+      photoBlobs: "id",
+      audio: "id, inspectionId, syncStatus",
+      audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+      audioChunkBlobs: "id",
+      inspectors: "id, name",
+      inspectorStampBlobs: "id",
+      attachments: "id, inspectionId, floorId, roomId, taskId, syncStatus",
+      attachmentBlobs: "id",
+      settings: "key",
+      syncMetadata: "key, projectId, entityType",
+      syncQueue: "id, entityType, entityId, createdAt",
+    });
+    // v7 (session's user request): a managed contractor-category list, used to group/filter the
+    // contractor bank and to let a category be created deliberately rather than only implied by whatever
+    // free text someone typed into `field` before -- see ContractorCategory's own doc comment in
+    // shared-types for why `field` itself stays a plain string rather than becoming a real foreign key.
+    this.version(7).stores({
+      projects: "id, status, updatedAt",
+      floors: "id, projectId, sortOrder",
+      rooms: "id, floorId",
+      contractors: "id, projectId",
+      contractorAliases: "id, contractorId, alias",
+      contractorBank: "id, companyName",
+      contractorCategories: "id, name",
       inspections: "id, projectId, status, endTime",
       contextEvents: "id, inspectionId, sequence, timestamp",
       issues: "id, inspectionId, projectId, roomId, status, syncStatus",

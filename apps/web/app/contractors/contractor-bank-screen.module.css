@@ -149,3 +149,37 @@
   display: flex;
   gap: 6px;
 }
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.filterChip {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.filterChipActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+.group {
+  margin-bottom: 22px;
+}
+
+.groupTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}

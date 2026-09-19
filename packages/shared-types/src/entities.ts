@@ -158,6 +158,23 @@ export const ContractorBankEntry = z.object({
 });
 export type ContractorBankEntry = z.infer<typeof ContractorBankEntry>;
 
+/**
+ * A managed list of field/discipline categories (session's user request: group and filter the contractor
+ * bank by קטגוריית תחום, and let the user create new categories deliberately) -- `Contractor.field` /
+ * `ContractorBankEntry.field` both stay plain strings (not a foreign key) for the same reason
+ * ContractorBankEntry itself doesn't reuse ids across projects: this is a convenience/organizing list, not
+ * a business record other rows need to reference relationally. Same local-only reasoning as Inspector/
+ * ContractorBankEntry -- pure client-side organization, nothing here needs syncing for the feature to be
+ * real. Picking (or typing a new) category writes its plain `name` into the `field` string, exactly like
+ * ContractorBankEntry's own "type a company not yet in the bank" flow already works.
+ */
+export const ContractorCategory = z.object({
+  id: uuid(),
+  name: z.string().min(1),
+  createdAt: isoDateTime().default(() => new Date().toISOString()),
+});
+export type ContractorCategory = z.infer<typeof ContractorCategory>;
+
 /* ------------------------------------------------------------------------------------------------
  * Inspector (session's user request — a reusable "bank" of supervisors/inspectors, each with an
  * embeddable stamp image that appears on a generated report's closing page). Cross-project (like the

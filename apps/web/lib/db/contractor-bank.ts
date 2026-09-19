@@ -1,5 +1,6 @@
 import { ContractorBankEntry } from "@av-inspection/shared-types";
 import { getLocalDb } from "./local-db";
+import { upsertContractorCategoryByName } from "./contractor-categories";
 
 export interface ContractorBankInput {
   companyName: string;
@@ -7,6 +8,12 @@ export interface ContractorBankInput {
   contactName?: string | null;
   phone?: string | null;
   email?: string | null;
+}
+
+/** A non-empty `field` always registers/reuses a category (session's user request: typing a new field
+ * value creates the category deliberately, not just implicitly) — a no-op for null/empty. */
+async function registerCategoryIfSet(field: string | null | undefined): Promise<void> {
+  if (field && field.trim()) await upsertContractorCategoryByName(field);
 }
 
 /** The cross-project contractor "bank" (session's user request) — see ContractorBankEntry's own doc
@@ -17,6 +24,7 @@ export async function listContractorBank(): Promise<ContractorBankEntry[]> {
 }
 
 export async function createContractorBankEntry(input: ContractorBankInput): Promise<ContractorBankEntry> {
+  await registerCategoryIfSet(input.field);
   const entry = ContractorBankEntry.parse({
     id: crypto.randomUUID(),
     companyName: input.companyName,
@@ -33,6 +41,7 @@ export async function updateContractorBankEntry(
   id: string,
   patch: Partial<ContractorBankInput>
 ): Promise<ContractorBankEntry> {
+  await registerCategoryIfSet(patch.field);
   const db = getLocalDb();
   const existing = await db.contractorBank.get(id);
   if (!existing) throw new Error(`updateContractorBankEntry: entry ${id} not found locally`);
@@ -54,6 +63,7 @@ export async function deleteContractorBankEntry(id: string): Promise<void> {
  * already present.
  */
 export async function upsertContractorBankEntryByName(input: ContractorBankInput): Promise<ContractorBankEntry> {
+  await registerCategoryIfSet(input.field);
   const normalized = input.companyName.trim().toLowerCase();
   const existing = (await getLocalDb().contractorBank.toArray()).find(
     (entry) => entry.companyName.trim().toLowerCase() === normalized
