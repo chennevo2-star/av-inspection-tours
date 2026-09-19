@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Room } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
-import { createTask } from "../../../lib/db/tasks";
+import { createTask, listTasksForInspection } from "../../../lib/db/tasks";
 import { capturePhoto } from "../../../lib/db/photos";
-import { addParticipant } from "../../../lib/db/inspections";
 import { useSpeechDictation, type UseSpeechDictationResult } from "../../../lib/recording/use-speech-dictation";
 import styles from "./new-task-wizard.module.css";
 
@@ -33,15 +32,11 @@ const STEP_TITLES: Record<Step, string> = {
 export function NewTaskWizard({
   inspectionId,
   projectId,
-  participants,
-  onParticipantsChanged,
   onClose,
   onTaskCreated,
 }: {
   inspectionId: string;
   projectId: string;
-  participants: string[];
-  onParticipantsChanged: (participants: string[]) => void;
   onClose: () => void;
   onTaskCreated: () => void;
 }) {
@@ -51,7 +46,13 @@ export function NewTaskWizard({
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [description, setDescription] = useState("");
   const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
-  const [newParticipantName, setNewParticipantName] = useState("");
+  const [newResponsibleName, setNewResponsibleName] = useState("");
+  // Ad-hoc names typed during THIS wizard session, before their task has actually been saved yet (so
+  // `tourAdHocNames` below, which is derived from already-saved tasks, can't see them). Merged with that
+  // list for display so a second "type a new name" this same session doesn't need retyping -- reset per
+  // wizard open, not persisted anywhere on its own; it only sticks around because the task that used it
+  // gets saved with that `responsibleParty` string (see the tour-scoped comment on `tourAdHocNames`).
+  const [sessionAdHocNames, setSessionAdHocNames] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const photosRef = useRef(photos);
@@ -69,6 +70,41 @@ export function NewTaskWizard({
     };
   }, []);
 
+  // Tasks are assigned to CONTRACTORS (a project-level, fixed list — see contractors-section.tsx), not to
+  // the tour's own participants (who's physically present, a separate and unrelated concept) — a real
+  // mismatch this session's user request pointed out: the wizard used to offer `participants` here.
+  const contractors = useLiveQuery(
+    () => getLocalDb().contractors.where("projectId").equals(projectId).toArray(),
+    [projectId]
+  );
+  const contractorNames = useMemo(() => (contractors ?? []).map((c) => c.companyName), [contractors]);
+
+  // A typed-but-not-a-real-contractor name (user request: still assignable by typing, without adding it
+  // to the project's own contractor list) stays an option "of that tour only" — derived from this
+  // inspection's own already-saved tasks rather than a new field/table, so it needs nothing extra to
+  // persist correctly across a reload mid-tour or a reopened New Task wizard.
+  const inspectionTasks = useLiveQuery(() => listTasksForInspection(inspectionId), [inspectionId]);
+  const tourAdHocNames = useMemo(() => {
+    const contractorSet = new Set(contractorNames);
+    const names = new Set<string>();
+    for (const task of inspectionTasks ?? []) {
+      if (task.responsibleParty && !contractorSet.has(task.responsibleParty)) names.add(task.responsibleParty);
+    }
+    return [...names];
+  }, [inspectionTasks, contractorNames]);
+
+  const responsibleOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const combined: string[] = [];
+    for (const name of [...contractorNames, ...tourAdHocNames, ...sessionAdHocNames]) {
+      if (!seen.has(name)) {
+        seen.add(name);
+        combined.push(name);
+      }
+    }
+    return combined;
+  }, [contractorNames, tourAdHocNames, sessionAdHocNames]);
+
   function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = ""; // allow selecting/retaking the same shot again
@@ -84,13 +120,14 @@ export function NewTaskWizard({
     });
   }
 
-  async function handleAddParticipant() {
-    const name = newParticipantName.trim();
+  function handleAddResponsible() {
+    const name = newResponsibleName.trim();
     if (!name) return;
-    const updated = await addParticipant(inspectionId, name);
-    onParticipantsChanged(updated.participants);
+    if (!responsibleOptions.includes(name)) {
+      setSessionAdHocNames((current) => [...current, name]);
+    }
     setResponsibleParty(name);
-    setNewParticipantName("");
+    setNewResponsibleName("");
   }
 
   async function handleConfirm() {
@@ -158,12 +195,12 @@ export function NewTaskWizard({
         ) : null}
         {step === 4 ? (
           <ResponsibleStep
-            participants={participants}
+            options={responsibleOptions}
             selected={responsibleParty}
             onSelect={setResponsibleParty}
-            newName={newParticipantName}
-            onNewNameChange={setNewParticipantName}
-            onAddParticipant={handleAddParticipant}
+            newName={newResponsibleName}
+            onNewNameChange={setNewResponsibleName}
+            onAddNew={handleAddResponsible}
           />
         ) : null}
       </div>
@@ -324,25 +361,25 @@ function DescriptionStep({
 }
 
 function ResponsibleStep({
-  participants,
+  options,
   selected,
   onSelect,
   newName,
   onNewNameChange,
-  onAddParticipant,
+  onAddNew,
 }: {
-  participants: string[];
+  options: string[];
   selected: string | null;
   onSelect: (name: string) => void;
   newName: string;
   onNewNameChange: (value: string) => void;
-  onAddParticipant: () => void;
+  onAddNew: () => void;
 }) {
   return (
     <div>
-      {participants.length > 0 ? (
+      {options.length > 0 ? (
         <div className={styles.participantGrid}>
-          {participants.map((name) => (
+          {options.map((name) => (
             <button
               key={name}
               type="button"
@@ -354,16 +391,16 @@ function ResponsibleStep({
           ))}
         </div>
       ) : (
-        <p className={styles.skipHint}>אין עדיין משתתפים רשומים לסיור זה — אפשר להוסיף ידנית למטה.</p>
+        <p className={styles.skipHint}>אין עדיין קבלנים רשומים בפרויקט זה — אפשר להוסיף ידנית למטה.</p>
       )}
       <div className={styles.addParticipantRow}>
         <input
-          placeholder="הוסף שם ידנית"
+          placeholder="הוסף קבלן שלא ברשימה"
           value={newName}
           onChange={(event) => onNewNameChange(event.target.value)}
-          aria-label="הוסף משתתף ידנית"
+          aria-label="הוסף קבלן שלא ברשימה"
         />
-        <button type="button" onClick={onAddParticipant}>
+        <button type="button" onClick={onAddNew}>
           הוסף
         </button>
       </div>

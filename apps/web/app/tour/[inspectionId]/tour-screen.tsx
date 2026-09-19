@@ -53,7 +53,11 @@ type Overlay = "new-task" | "tasks-table" | null;
  */
 function ActiveTour({ inspection }: { inspection: Inspection }) {
   const [overlay, setOverlay] = useState<Overlay>(null);
-  const [participants, setParticipants] = useState(inspection.participants);
+  // Read-only here: the New Task wizard used to be able to grow this list too (typing a new name there
+  // added it as a tour participant), a conflation this session's user request corrected -- see
+  // new-task-wizard.tsx's own comment. Editing participants now only happens at tour-start
+  // (tour-section.tsx), which is the only place that still writes to it.
+  const [participants] = useState(inspection.participants);
   const [ended, setEnded] = useState(inspection.endTime !== null);
   const [ending, setEnding] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -148,8 +152,6 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
         <NewTaskWizard
           inspectionId={inspection.id}
           projectId={inspection.projectId}
-          participants={participants}
-          onParticipantsChanged={setParticipants}
           onClose={() => setOverlay(null)}
           onTaskCreated={() => setOverlay(null)}
         />
