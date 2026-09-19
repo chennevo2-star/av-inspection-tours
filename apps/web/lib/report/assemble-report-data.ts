@@ -9,12 +9,11 @@ import { formatTourName } from "../format-tour-name";
 const OFFICE_NAME = "ל.שחר";
 
 /**
- * Static asset path for the office logo (spec: "must include the ל.שחר logo"). No real logo file has
- * been supplied yet as of this build, so this fetch will 404 and `logo` will come back `null` — the
- * report still generates correctly without one (build-docx.ts's cover page just omits the image), per
- * the no-mock-success rule: an absent logo is shown honestly as absent, never faked. Once the real
- * file is supplied, drop it at apps/web/public/logo-lshachar.png (or .jpg — see mimeType guess below)
- * and no other code changes are needed.
+ * Static asset path for the office logo (spec: "must include the ל.שחר logo"). The real file lives at
+ * apps/web/public/logo-lshachar.png. If it's ever missing (a fresh checkout without that asset, or the
+ * file gets moved/renamed), this fetch 404s and `logo` comes back `null` -- the report still generates
+ * correctly without one (build-docx.ts's/build-pdf.ts's cover pages just omit the image), per the
+ * no-mock-success rule: an absent logo is shown honestly as absent, never faked.
  */
 const LOGO_PATH = "/logo-lshachar.png";
 

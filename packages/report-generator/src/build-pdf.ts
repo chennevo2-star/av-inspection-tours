@@ -8,7 +8,6 @@ import {
   type RGB,
 } from "@cantoo/pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import bidiFactory from "bidi-js";
 import { NOTO_SANS_HEBREW_BOLD_BASE64, NOTO_SANS_HEBREW_REGULAR_BASE64 } from "./hebrew-font-data.js";
 import type { InspectionReportData, ReportPhoto, ReportTaskRow } from "./types.js";
 
@@ -33,18 +32,15 @@ import type { InspectionReportData, ReportPhoto, ReportTaskRow } from "./types.j
  *   generates the PDF directly from data instead (candidate (b) from the research brief), which is also
  *   why `InspectionReportData` (not DOCX bytes) is its input — see the cross-format regression test in
  *   build-pdf.test.ts for why that's the safety net that replaces ADR-004's old guarantee.
- * - **pdf-lib** gives exact, low-level control over text/image placement, which is what real Hebrew RTL
- *   needs: PDF's text-showing operators have no concept of "paragraph direction" at all (unlike
- *   OOXML/`docx`'s `w:bidi`) — every run has to be positioned by us, in true visual left-to-right glyph
- *   order, ourselves. The original `Hopding/pdf-lib` package is unmaintained (no npm release in over a
- *   year); this file depends on `@cantoo/pdf-lib` instead, an actively maintained fork that keeps the
- *   identical API/types (confirmed against its own npm metadata: MIT, versions actively published).
- * - **bidi-js** (MIT, a pure, focused implementation of the Unicode Bidirectional Algorithm — actively
- *   released, not merely "old but stable": v1.1.0 published days before this was written) supplies the
- *   one real thing pdf-lib can't: turning logical (typed/stored) character order into visual (drawn)
- *   order. Hebrew (unlike Arabic) needs no glyph reshaping, only reordering + mirroring of a small set of
- *   characters (parentheses etc.) — exactly what bidi-js's `getEmbeddingLevels`/`getReorderSegments`/
- *   `getMirroredCharactersMap` trio provides, per its own README usage example.
+ * - **pdf-lib** gives exact, low-level control over text/image placement. The original `Hopding/pdf-lib`
+ *   package is unmaintained (no npm release in over a year); this file depends on `@cantoo/pdf-lib`
+ *   instead, an actively maintained fork that keeps the identical API/types (confirmed against its own
+ *   npm metadata: MIT, versions actively published).
+ * - **RTL text**: no manual bidi reordering is needed. `@pdf-lib/fontkit`'s real font/shaping layer
+ *   already renders Hebrew correctly from plain logical-order text handed to `page.drawText` — see
+ *   `toVisualOrder`'s own comment (below) for how a manual bidi-js-based reversal step was mistakenly
+ *   added and then removed once this was verified empirically. Hebrew needs no glyph reshaping either
+ *   way (unlike Arabic).
  * - **Fonts**: pdf-lib can only embed real glyph outlines it's handed — it can't resolve a font "by name"
  *   the way Word/LibreOffice do against the OS's installed fonts, so build-docx.ts's plain `"Arial"`
  *   string isn't an option here. `@embedpdf/fonts-hebrew` (OFL-1.1 — the standard font-embedding license,
@@ -56,8 +52,6 @@ import type { InspectionReportData, ReportPhoto, ReportTaskRow } from "./types.j
  *   *alongside* pdf-lib's built-in Standard-14 Helvetica (zero extra asset, present in effectively every
  *   PDF viewer) and splits every line into per-script runs at draw time — see `splitScriptRuns` below.
  */
-
-const bidi = bidiFactory();
 
 // ---------------------------------------------------------------------------------------------------
 // Page geometry
@@ -150,42 +144,30 @@ function fontFor(fonts: FontSet, hebrew: boolean, bold: boolean): PDFFont {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Bidi: logical (typed/stored) order → visual (drawn) order, per REPORTING.md §33-34's mixed-content
-// requirement. PDF text-showing operators have zero concept of paragraph direction (unlike `docx`'s
-// `w:bidi`) -- every run must already be in true left-to-right glyph-drawing order before it reaches
-// `page.drawText`.
+// Bidi: this function name and its bidi-js-based implementation are LEGACY -- see the real fix note
+// below. Kept as a passthrough (not deleted outright) because every call site already threads text
+// through it, and reverting call sites too would be a much larger, purely-cosmetic diff for the same
+// end result.
+//
+// REAL BUG FOUND AND FIXED HERE (2026-09-19, user report: "PDF text/table isn't RTL"): this function
+// used to run bidi-js's `getReorderSegments` to manually reverse each RTL run's character order before
+// handing it to `page.drawText` -- the standard approach for a renderer with NO bidi awareness at all.
+// That premise was wrong for this stack specifically: verified empirically (not just reasoned about) by
+// building the exact same InspectionReportData through build-docx.ts, converting it with a real
+// LibreOffice instance, and comparing the two PDFs directly in a browser -- `@cantoo/pdf-lib`'s
+// `page.drawText`, going through `@pdf-lib/fontkit`'s real font/shaping layer for these embedded TTFs,
+// already renders Hebrew text correctly from plain logical-order input, with NO manual reversal. The
+// manual reversal was therefore flipping already-correct output, which is exactly what the bug looked
+// like: every Hebrew word individually backwards, and (as a consequence, since table cell headers/values
+// are just more text run through this same function) the task table reading wrong too -- one root cause
+// behind both complaints. The paired mirroring step (swapping bracket-like characters for their RTL
+// counterpart) was removed for the same reason: it was only ever correct paired with the reversal it
+// compensated for; confirmed via the same side-by-side comparison that parentheses in body text render
+// correctly with neither step applied.
 // ---------------------------------------------------------------------------------------------------
 
 function toVisualOrder(text: string): string {
-  if (!text) return text;
-  // Explicit "rtl" base direction -- mirrors build-docx.ts's own hardcoded `bidirectional: true` on
-  // every paragraph (REPORTING.md §33: RTL is a base requirement, not auto-detected). Without this,
-  // bidi-js would auto-detect a paragraph's base direction from its first strong character (per
-  // UAX#9), which would flip to LTR for any field that happens to *start* with a model number or an
-  // English word (e.g. a status/description beginning with "HDMI...") -- a real, content-dependent
-  // divergence from how build-docx.ts renders the exact same string.
-  const embeddingLevels = bidi.getEmbeddingLevels(text, "rtl");
-  // Plain UTF-16 code-unit indexing (not a code-point-aware split) -- this matches bidi-js's own
-  // indexing scheme exactly, and is safe here because every real string this app produces (Hebrew,
-  // Latin, digits, basic punctuation) stays within the Basic Multilingual Plane, where code units and
-  // code points coincide.
-  const chars = text.split("");
-  // getMirroredCharactersMap wants the raw per-character levels array (`.levels`), not the whole
-  // {levels, paragraphs} result object getEmbeddingLevels returns.
-  const mirrored = bidi.getMirroredCharactersMap(text, embeddingLevels.levels);
-  mirrored.forEach((replacement: string, index: number) => {
-    chars[index] = replacement;
-  });
-  const flips = bidi.getReorderSegments(text, embeddingLevels);
-  for (const [start, end] of flips) {
-    // getReorderSegments is typed as the looser `number[][]` even though every real entry is a
-    // [start, end] pair -- noUncheckedIndexedAccess makes both ends `number | undefined` here; skip
-    // (never risk an out-of-bounds/garbage slice) if that contract is ever somehow violated.
-    if (start === undefined || end === undefined) continue;
-    const segment = chars.slice(start, end + 1).reverse();
-    chars.splice(start, end - start + 1, ...segment);
-  }
-  return chars.join("");
+  return text;
 }
 
 const HEBREW_BLOCK_START = 0x0590;

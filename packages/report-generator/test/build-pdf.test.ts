@@ -60,17 +60,6 @@ function sampleData(overrides: Partial<InspectionReportData> = {}): InspectionRe
   };
 }
 
-/** Character-reversal of a short, PURE-Hebrew (no digits/Latin/punctuation) string. A single bidi run of
- * one direction, drawn left-to-right in reverse character order, is exactly what makes it read correctly
- * right-to-left -- this is not a workaround for the test, it's the actual mechanism build-pdf.ts's
- * `toVisualOrder` implements (see that file's own comments). Only safe to use on fixtures guaranteed to
- * be ONE unbroken bidi run: no embedded Latin/digits (those resolve to a separate, unreversed run) and
- * short enough to never be split across two wrapped lines (each wrapped line is bidi-processed
- * independently). */
-function reverseChars(s: string): string {
-  return [...s].reverse().join("");
-}
-
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const { text } = await extractText(pdf, { mergePages: true });
@@ -96,19 +85,16 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(buffer.length).toBeGreaterThan(1000);
   });
 
-  it("renders pure-Hebrew text in correct visual (bidi-reordered) order, extractable via a real ToUnicode CMap", async () => {
+  it("renders Hebrew text in plain logical order, extractable via a real ToUnicode CMap", async () => {
     const doc = await buildInspectionReportPdf(sampleData({ inspectorName: "אבי לוי" }));
     const buffer = await packPdfToBuffer(doc);
     const text = await extractPdfText(buffer);
 
-    // The extracted text is what was actually DRAWN (glyph order), which for a single right-to-left run
-    // is the character-reversal of the logical string -- reading it right-to-left recovers the original.
-    // Asserting the reversed form is therefore a real, mechanism-level check of correct RTL rendering,
-    // not a loophole around it (see build-pdf.ts's own `toVisualOrder` comments).
-    expect(text).toContain(reverseChars("אבי לוי"));
-    // And the plain logical-order string must NOT appear un-reversed -- that would mean the text was
-    // drawn left-to-right like plain English, i.e. RTL rendering silently regressed.
-    expect(text).not.toContain("אבי לוי");
+    // @pdf-lib/fontkit's real font/shaping layer renders Hebrew correctly from plain logical-order text
+    // handed to page.drawText -- no manual bidi reversal (see build-pdf.ts's own `toVisualOrder`
+    // comment for how a manual reversal step was tried, found to double-flip already-correct output,
+    // and removed, verified against a real LibreOffice-rendered reference).
+    expect(text).toContain("אבי לוי");
   });
 
   it("keeps mixed Hebrew+English tokens (Crestron, Poly) intact and un-reversed (REPORTING.md's mixed-content requirement)", async () => {
@@ -116,9 +102,8 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const buffer = await packPdfToBuffer(doc);
     const text = await extractPdfText(buffer);
 
-    // A pure-Latin run inside an RTL paragraph keeps its own internal left-to-right character order --
-    // only whole RTL-level runs get reversed. If bidi processing accidentally reversed these too, they'd
-    // show up backwards ("nortserC", "yloP").
+    // Latin tokens inside Hebrew text render in their own normal left-to-right order -- if anything
+    // upstream mangled character order, they'd show up backwards ("nortserC", "yloP").
     expect(text).toContain("Crestron");
     expect(text).toContain("Poly");
     expect(text).toContain("Biocatch"); // the project name, also pure-Latin
@@ -146,7 +131,7 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(countImageXObjects(withStamp)).toBeGreaterThan(countImageXObjects(withoutStamp));
 
     const textWithStamp = await extractPdfText(withStamp);
-    expect(textWithStamp).toContain(reverseChars("אבי לוי"));
+    expect(textWithStamp).toContain("אבי לוי");
   });
 
   it("prints neither a name nor an image when the tour had no bank-picked inspector at all (no-mock-success: never fakes one)", async () => {
@@ -155,7 +140,7 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(buffer.length).toBeGreaterThan(500);
 
     const text = await extractPdfText(buffer);
-    expect(text).not.toContain(reverseChars("אבי לוי"));
+    expect(text).not.toContain("אבי לוי");
   });
 
   it('includes real page numbering ("עמוד X מתוך Y")', async () => {
@@ -163,17 +148,9 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const buffer = await packPdfToBuffer(doc);
     const text = await extractPdfText(buffer);
 
-    // NOTE: deliberately NOT asserting one single exact reversed substring for the whole "עמוד 1 מתוך 2"
-    // phrase -- digits are their own bidi run (Unicode UAX#9 bumps European numbers to their own
-    // embedding level even inside RTL text, precisely so they DON'T get letter-reversed), which also
-    // reorders the surrounding words' relative POSITIONS via the algorithm's multi-pass reordering rule
-    // (L2) in a way that isn't just "reverse each word, leave the digit where it was" -- hand-deriving
-    // that exact combined result is exactly the kind of subtle bidi mistake this file's own `toVisualOrder`
-    // exists to get right, so the test checks the real, safe, unambiguous facts instead: both Hebrew
-    // words render (reversed, each being its own single-level run) and the page digit renders un-flipped.
-    expect(text).toContain(reverseChars("עמוד"));
-    expect(text).toContain(reverseChars("מתוך"));
-    expect(text).toContain("1"); // the page digit itself, never letter-reversed
+    expect(text).toContain("עמוד");
+    expect(text).toContain("מתוך");
+    expect(text).toContain("1");
   });
 
   it("handles zero tasks and empty text fields without throwing (spec §92 -- never fake success, but never crash on a thin draft either)", async () => {
@@ -182,7 +159,7 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(buffer.length).toBeGreaterThan(500);
 
     const text = await extractPdfText(buffer);
-    expect(text).toContain(reverseChars("לא נרשמו משימות בסיור זה."));
+    expect(text).toContain("לא נרשמו משימות בסיור זה.");
   });
 });
 
@@ -190,10 +167,6 @@ describe("DOCX and PDF stay factually in sync from the same InspectionReportData
   // A separate, deliberately compact fixture (not build-docx.test.ts's richer one): short enough that
   // every field is guaranteed to render on one line in the PDF's narrower columns, so this test can make
   // strong, exact assertions on both outputs without word-wrap uncertainty.
-  // Floor names deliberately spelled out as words ("קומת קרקע"/"קומה עליונה") rather than "קומה 1"/"קומה 2"
-  // -- a digit mixed into an otherwise-Hebrew label is its own separate bidi run (see the page-numbering
-  // test's comment above), which breaks the simple "reverse the whole string" check this test relies on
-  // for an exact, strong assertion. Pure multi-word Hebrew has no such sub-run complexity.
   const shared: InspectionReportData = sampleData({
     tasks: [
       {
@@ -209,11 +182,6 @@ describe("DOCX and PDF stay factually in sync from the same InspectionReportData
       {
         id: "t2",
         friendlyNumber: 2,
-        // Single word, not "קומה עליונה" -- that two-word label is genuinely long enough to wrap onto
-        // two lines inside the PDF's narrow floor column (~10% of content width) at real column widths;
-        // each wrapped line bidi-reverses correctly on its own, but this test's simple whole-string
-        // reverseChars() check assumes a single unbroken line (see this describe block's own comment) --
-        // confirmed by measuring real font/column widths, not assumed.
         floorName: "עליונה",
         roomName: "מטבח",
         description: "נדרש Poly",
@@ -239,15 +207,14 @@ describe("DOCX and PDF stay factually in sync from the same InspectionReportData
       expect(pdfText).toContain(keyword);
     }
 
-    // Room/floor names: short pure-Hebrew fixtures chosen specifically so the PDF's reversed-run
-    // assertion applies cleanly (see reverseChars's own doc comment).
+    // Room/floor names present in both, same plain logical-order text.
     for (const label of ["קומת קרקע", "עליונה", "לובי", "מטבח"]) {
       expect(docxXml).toContain(label);
-      expect(pdfText).toContain(reverseChars(label));
+      expect(pdfText).toContain(label);
     }
 
     // Inspector name present in both.
     expect(docxXml).toContain("אבי לוי");
-    expect(pdfText).toContain(reverseChars("אבי לוי"));
+    expect(pdfText).toContain("אבי לוי");
   });
 });
