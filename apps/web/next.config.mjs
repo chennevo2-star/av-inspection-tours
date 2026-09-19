@@ -33,7 +33,16 @@ const nextConfig = {
   // letting Node `require()` it directly at runtime is the standard fix for this class of native/WASM
   // library-under-webpack problem. Renamed from `experimental.serverComponentsExternalPackages` ->
   // top-level `serverExternalPackages` when upgrading to Next.js 16 (the old key now just warns/ignores).
-  serverExternalPackages: ["@electric-sql/pglite"],
+  // "postgres" is here for a Cloudflare-specific reason too: it ships its own dedicated `workerd`
+  // package-export condition (`./cf/src/index.js`, a battle-tested build with Hyperdrive-safe
+  // `cloudflare:sockets` wiring already built in and bundler-safe) -- but that export condition is only
+  // consulted for a package Next treats as external; a bundled/inlined import resolves through plain Node
+  // conditions instead, silently getting the wrong build. This is the OFFICIAL documented fix (see
+  // @opennextjs/cloudflare's own "workerd howto"), not a guess: without it, every real request to the
+  // Cloudflare/Hyperdrive deploy hung until Workers force-killed it, confirmed over several failed
+  // hand-rolled alternatives (including a custom cloudflare:sockets socket adapter) -- see this repo's git
+  // log for the full saga before finding this, the actual root cause.
+  serverExternalPackages: ["@electric-sql/pglite", "postgres"],
   // Next.js 16 defaults to Turbopack, which ignores this file's own `webpack()` hook entirely (real
   // build error otherwise: "using Turbopack, with a webpack config and no turbopack config"). Rather
   // than bet on translating the `.js`->`.ts` extensionAlias fix below into Turbopack's own (different)

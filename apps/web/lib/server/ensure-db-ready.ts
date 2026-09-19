@@ -23,28 +23,11 @@ async function bridgeHyperdriveConnectionString(): Promise<void> {
     const { env } = getCloudflareContext();
     const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
     if (hyperdrive?.connectionString) {
-      process.env.DATABASE_URL = stripTlsParamsForHyperdrive(hyperdrive.connectionString);
+      process.env.DATABASE_URL = hyperdrive.connectionString;
     }
   } catch {
     // Not running under the OpenNext/Workers adapter (Container or local dev) -- expected, not an error.
   }
-}
-
-/**
- * Confirmed via a temporary debug route against the real deployed Worker: `env.HYPERDRIVE.connectionString`
- * already carries `sslmode=disable` on its own (Hyperdrive fully owns and secures the real hop to Neon;
- * the Worker only ever talks to its own `<id>.hyperdrive.local` proxy address) -- so this stripping is
- * belt-and-suspenders, not load-bearing, but harmless to keep: an absent `sslmode` and an explicit
- * `sslmode=disable` both make postgres.js resolve `ssl: false` the same way. `channel_binding` is a
- * Postgres SCRAM option Hyperdrive's proxy address has no use for either way. See packages/db/src/client.ts's
- * own comment for what actually was the missing piece: a `cloudflare:sockets`-based socket adapter, since
- * plain `net.Socket()` (even with `ssl: false`) never gets Hyperdrive's real interception at all.
- */
-function stripTlsParamsForHyperdrive(connectionString: string): string {
-  const url = new URL(connectionString);
-  url.searchParams.delete("sslmode");
-  url.searchParams.delete("channel_binding");
-  return url.toString();
 }
 
 /**
