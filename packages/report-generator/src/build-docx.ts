@@ -131,6 +131,15 @@ function buildTaskTable(tasks: ReportTaskRow[]): Table {
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    // Real bug found and fixed here (user report, 2026-09-19: "the table needs to be RTL"): the columns
+    // above are authored left-to-right ("number" first, "status" last) -- without this flag, Word renders
+    // them in exactly that literal order, i.e. the row NUMBER column ends up on the visual LEFT and
+    // STATUS on the visual RIGHT, backwards for a Hebrew reader (who expects the first/most-important
+    // column on the right, where RTL reading starts). `w:bidiVisual` is OOXML's own table-level property
+    // for exactly this: it tells Word to flip the DISPLAY order of an otherwise unchanged column
+    // definition, the same way `AlignmentType.START` (used elsewhere in this file) resolves to the right
+    // edge for RTL paragraphs without the author renumbering anything.
+    visuallyRightToLeft: true,
     borders: {
       top: { style: BorderStyle.SINGLE, size: 2, color: "9CA3AF" },
       bottom: { style: BorderStyle.SINGLE, size: 2, color: "9CA3AF" },

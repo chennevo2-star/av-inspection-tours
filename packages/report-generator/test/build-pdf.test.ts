@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractText, getDocumentProxy } from "unpdf";
 import { buildInspectionReportPdf, packPdfToBuffer, buildInspectionReportDocument, packToBuffer } from "../src/index.js";
+import { computeColumnBoxes, CONTENT_LEFT, CONTENT_RIGHT } from "../src/build-pdf.js";
 import type { InspectionReportData } from "../src/types.js";
 
 // Real, fully-decodable 4x4 JPEG/PNG bytes (generated with Pillow during this task's own research, not
@@ -107,6 +108,24 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     expect(text).toContain("Crestron");
     expect(text).toContain("Poly");
     expect(text).toContain("Biocatch"); // the project name, also pure-Latin
+  });
+
+  it("lays out the task table RTL: the first-authored column (number) sits at the right edge, the last (status) at the left (user report, 2026-09-19: 'the table needs to be RTL')", () => {
+    const boxes = computeColumnBoxes();
+
+    // "number" is authored first in TASK_COLUMN_ORDER -- for a Hebrew reader (who starts at the right),
+    // it must be the RIGHTMOST column, i.e. its own right edge is the page's content boundary.
+    expect(boxes.number.right).toBeCloseTo(CONTENT_RIGHT, 5);
+    // "status" is authored last -- it must be the LEFTMOST column.
+    expect(boxes.status.left).toBeCloseTo(CONTENT_LEFT, 5);
+    // And every column strictly to the right of the next one in authoring order (no gaps, no overlaps,
+    // monotonically decreasing X as you walk the array) -- catches a partial/off-by-one fix, not just a
+    // fully-inverted or fully-untouched one.
+    const order = ["number", "floor", "room", "description", "photo", "responsible", "status"] as const;
+    for (let i = 0; i < order.length - 1; i++) {
+      // Non-null: `i` and `i + 1` are both in-bounds by the loop condition above.
+      expect(boxes[order[i]!].left).toBeCloseTo(boxes[order[i + 1]!].right, 5);
+    }
   });
 
   it("embeds the task photo as a real image XObject, byte-identical to the source JPEG", async () => {

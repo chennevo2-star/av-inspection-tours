@@ -62,8 +62,10 @@ const MARGIN = 40;
 const HEADER_RESERVE = 22; // vertical space reserved at the top of every page for the running header
 const FOOTER_RESERVE = 34; // vertical space reserved at the bottom for the footer + page number
 
-const CONTENT_LEFT = MARGIN;
-const CONTENT_RIGHT = PAGE_SIZE[0] - MARGIN;
+// Exported alongside computeColumnBoxes() purely for build-pdf.test.ts's own use (asserting the RTL
+// table's rightmost/leftmost column boundaries against real numbers, not hardcoded magic ones).
+export const CONTENT_LEFT = MARGIN;
+export const CONTENT_RIGHT = PAGE_SIZE[0] - MARGIN;
 const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
 const CONTENT_TOP = PAGE_SIZE[1] - MARGIN - HEADER_RESERVE;
 const CONTENT_BOTTOM = MARGIN + FOOTER_RESERVE;
@@ -459,9 +461,9 @@ function drawParagraph(cursor: Cursor, fonts: FontSet, text: string): void {
 // Task table
 // ---------------------------------------------------------------------------------------------------
 
-// Same proportions as build-docx.ts's TASK_COLUMN_WIDTHS, and the SAME left-to-right authoring order --
-// deliberately matching build-docx.ts's actual (not idealized) column arrangement, so the two renderers
-// don't independently invent two different "correct" RTL table directions for the same report.
+// Same proportions and the SAME authoring order as build-docx.ts's TASK_COLUMN_WIDTHS ("number" first,
+// "status" last) -- but see computeColumnBoxes() below for why the two renderers don't place them at the
+// same physical X despite sharing this order.
 const TASK_COLUMN_WIDTHS = { number: 6, floor: 10, room: 12, description: 28, photo: 16, responsible: 16, status: 12 };
 const TASK_COLUMN_ORDER = ["number", "floor", "room", "description", "photo", "responsible", "status"] as const;
 type TaskColumnKey = (typeof TASK_COLUMN_ORDER)[number];
@@ -487,13 +489,28 @@ interface ColumnBox {
   right: number;
 }
 
-function computeColumnBoxes(): Record<TaskColumnKey, ColumnBox> {
+/**
+ * Real bug found and fixed here (user report, 2026-09-19: "the table needs to be RTL"): TASK_COLUMN_ORDER
+ * is authored left-to-right ("number" first, "status" last) to match build-docx.ts's own column
+ * definitions -- but unlike Word (which flips DISPLAY order for a `visuallyRightToLeft` table while
+ * leaving the column definitions themselves untouched, see build-docx.ts's own comment on that flag),
+ * pdf-lib has no such table-level RTL concept; box positions here are the ONLY thing that decides where
+ * a column actually appears. Walking the column list from the page's RIGHT edge (instead of its left)
+ * is what makes the visual result match: the first-authored column ("number") lands at the RIGHT, where
+ * a Hebrew reader's eye starts, and the last-authored one ("status") at the left -- exactly mirroring
+ * what `visuallyRightToLeft: true` achieves in the DOCX path, achieved here by geometry instead of a flag.
+ */
+// Exported (not re-exported via index.ts -- this stays an internal detail of the package's public API)
+// purely so build-pdf.test.ts can assert the column geometry directly, white-box, instead of only via a
+// full rendered PDF's text positions -- this is the exact function whose LTR-vs-RTL box placement was the
+// real bug (see its own comment above computeColumnBoxes' definition).
+export function computeColumnBoxes(): Record<TaskColumnKey, ColumnBox> {
   const boxes = {} as Record<TaskColumnKey, ColumnBox>;
-  let x = CONTENT_LEFT;
+  let x = CONTENT_RIGHT;
   for (const key of TASK_COLUMN_ORDER) {
     const width = (TASK_COLUMN_WIDTHS[key] / 100) * CONTENT_WIDTH;
-    boxes[key] = { left: x, right: x + width };
-    x += width;
+    boxes[key] = { left: x - width, right: x };
+    x -= width;
   }
   return boxes;
 }

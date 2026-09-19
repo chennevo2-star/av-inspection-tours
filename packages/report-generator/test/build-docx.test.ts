@@ -111,6 +111,19 @@ describe("buildInspectionReportDocument — real OOXML output, not HTML-as-.docx
     expect(headerXml).toContain('w:jc w:val="end"'); // the office-name header line
   });
 
+  it("marks the task table w:bidiVisual so Word displays its columns RTL (user report, 2026-09-19: 'the table needs to be RTL')", async () => {
+    // The table's own column definitions (buildTaskTable's TASK_COLUMN_WIDTHS) are authored left-to-right
+    // ("number" first, "status" last) -- without this flag Word renders them in that literal order, i.e.
+    // the row NUMBER ends up on the visual left and STATUS on the visual right, backwards for a Hebrew
+    // reader. `w:bidiVisual` is what flips the DISPLAY order without renumbering any column.
+    const doc = buildInspectionReportDocument(sampleData());
+    const buffer = await packToBuffer(doc);
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+
+    expect(xml).toContain("w:bidiVisual");
+  });
+
   it("embeds the task photo as a real image part in the zip", async () => {
     const doc = buildInspectionReportDocument(sampleData());
     const buffer = await packToBuffer(doc);
