@@ -35,7 +35,7 @@ export function HomeScreen() {
 
       {activeInspection ? (
         <Link href={`/tour/${activeInspection.id}`} className={styles.recoveryBanner}>
-          <span>⚠ נמצא סיור שלא הסתיים: {formatTourName(activeInspection.date, activeProject?.name ?? "…")}</span>
+          <span>⚠ נמצא סיור שלא הסתיים: {formatTourName(activeInspection.date, activeProject?.name ?? "…", activeInspection.categories)}</span>
           <span className={styles.recoveryAction}>המשך סיור ←</span>
         </Link>
       ) : null}

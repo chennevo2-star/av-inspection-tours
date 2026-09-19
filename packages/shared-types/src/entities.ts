@@ -194,6 +194,15 @@ export const Inspector = z.object({
 });
 export type Inspector = z.infer<typeof Inspector>;
 
+/**
+ * Fixed set of tour disciplines (user request: "הוסף לכל סיור את קטגוריית הסיור") -- deliberately a
+ * closed enum, not an editable bank like ContractorCategory: the user gave exactly these three and never
+ * asked for a "create new category" flow the way they did for contractors. Drives both the checkbox list
+ * shown when starting a tour and the generated tour name (see format-tour-name.ts).
+ */
+export const TourCategory = z.enum(["מולטימדיה", "תקשורת", "ביטחון"]);
+export type TourCategory = z.infer<typeof TourCategory>;
+
 /* ------------------------------------------------------------------------------------------------
  * Inspection (spec §Inspection)
  * ---------------------------------------------------------------------------------------------- */
@@ -222,6 +231,10 @@ export const Inspection = z.object({
    * is opened and something is typed. */
   generalText: z.string().nullable().default(null),
   summaryText: z.string().nullable().default(null),
+  /** The tour's discipline(s) (user request), chosen when the tour is started -- drives the generated
+   * tour name (format-tour-name.ts). Empty for tours created before this feature existed; the name
+   * formatter falls back to omitting the category segment entirely in that case. */
+  categories: z.array(TourCategory).default([]),
 });
 export type Inspection = z.infer<typeof Inspection>;
 

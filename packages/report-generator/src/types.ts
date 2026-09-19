@@ -23,6 +23,10 @@ export interface ReportTaskRow {
 export interface InspectionReportData {
   officeName: string;
   logo: ReportPhoto | null;
+  /** The tour's full display name, already formatted (e.g. `טופס פיקוח עליון "מולטימדיה" פרויקט א׳
+   * 01/02/2026`) -- computed once by the assembling side (apps/web's format-tour-name.ts) so this
+   * package never needs to know the category-list/quoting rules itself, only how to print a string. */
+  tourName: string;
   projectName: string;
   projectAddress: string | null;
   inspectionNumber: number;

@@ -95,7 +95,7 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
       <main className={styles.wrap}>
         <div className={styles.doneScreen}>
           <div className={styles.doneTitle}>✅ הסיור נשמר בהצלחה במכשיר</div>
-          <p className={styles.projectName}>{formatTourName(inspection.date, project?.name ?? "…")}</p>
+          <p className={styles.projectName}>{formatTourName(inspection.date, project?.name ?? "…", inspection.categories)}</p>
           <p className={styles.doneHint}>
             ניתן עדיין לייצא דו״ח סיכום מהסיור הזה, או לפתוח אותו מחדש כדי לערוך משימות. הסנכרון לענן יבוצע
             ברקע כשיש חיבור.
@@ -119,7 +119,7 @@ function ActiveTour({ inspection }: { inspection: Inspection }) {
       <header className={styles.header}>
         <div className={styles.headerTop}>
           <div>
-            <div className={styles.inspectionNumber}>{formatTourName(inspection.date, project?.name ?? "…")}</div>
+            <div className={styles.inspectionNumber}>{formatTourName(inspection.date, project?.name ?? "…", inspection.categories)}</div>
           </div>
           <Link href={`/projects/${inspection.projectId}`} className={styles.exitLink}>
             יציאה

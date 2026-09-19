@@ -1,0 +1,1 @@
+ALTER TABLE "inspections" ADD COLUMN "categories" jsonb DEFAULT '[]'::jsonb NOT NULL;

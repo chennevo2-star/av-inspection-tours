@@ -415,7 +415,7 @@ function drawCover(cursor: Cursor, fonts: FontSet, data: InspectionReportData, l
   const dateLabel = formatDateLabel(data.inspectionDate);
   drawAlignedLine(
     cursor.page,
-    `סיור פיקוח עליון מולטימדיה — ${data.projectName} — ${dateLabel}`,
+    data.tourName,
     { left: CONTENT_LEFT, right: CONTENT_RIGHT },
     cursor.y,
     18,

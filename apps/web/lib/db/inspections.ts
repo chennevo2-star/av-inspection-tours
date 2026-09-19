@@ -11,7 +11,8 @@ export async function startInspection(
   projectId: string,
   inspector: string,
   participants: string[] = [],
-  inspectorId: string | null = null
+  inspectorId: string | null = null,
+  categories: string[] = []
 ): Promise<Inspection> {
   const db = getLocalDb();
   const existingCount = await db.inspections.where("projectId").equals(projectId).count();
@@ -31,6 +32,7 @@ export async function startInspection(
     syncStatus: "LOCAL_ONLY",
     aiStatus: "לא_רלוונטי",
     reportStatus: "לא_הופק",
+    categories,
   });
   await db.inspections.add(inspection);
   await enqueueSync("Inspection", inspection.id, "create", inspection);

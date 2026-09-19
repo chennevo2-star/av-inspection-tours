@@ -9,7 +9,6 @@ import { assembleReportData } from "../../../../lib/report/assemble-report-data"
 import { saveGeneratedFile } from "../../../../lib/report/save-file";
 import { useSpeechDictation } from "../../../../lib/recording/use-speech-dictation";
 import { useMounted } from "../../../../lib/hooks/use-mounted";
-import { formatTourName } from "../../../../lib/format-tour-name";
 import { updateInspectionReportText } from "../../../../lib/db/inspections";
 import { deleteTask as deleteTaskRecord, updateTask } from "../../../../lib/db/tasks";
 import { ReportTaskRows } from "./report-task-rows";
@@ -23,7 +22,7 @@ type LoadState = { status: "loading" } | { status: "error"; message: string } | 
 function reportFileName(data: InspectionReportData, extension: string): string {
   // Strip characters that are illegal in a Windows filename (OneDrive on this user's machine runs on
   // Windows) -- the tour name's own quote marks in particular would otherwise land straight in the name.
-  const safeName = formatTourName(data.inspectionDate, data.projectName).replace(/[\\/:*?"<>|]/g, " ").trim();
+  const safeName = data.tourName.replace(/[\\/:*?"<>|]/g, " ").trim();
   return `${safeName}.${extension}`;
 }
 
@@ -238,7 +237,7 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
         <Link href={`/tour/${inspectionId}`} className={styles.backLink}>
           ← חזרה לסיור
         </Link>
-        <h1 className={styles.title}>{formatTourName(data.inspectionDate, data.projectName)}</h1>
+        <h1 className={styles.title}>{data.tourName}</h1>
         <p className={styles.saveIndicator}>
           {saveStatus === "saving" ? "שומר…" : saveStatus === "saved" ? "✓ נשמר" : ""}
         </p>

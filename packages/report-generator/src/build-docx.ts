@@ -178,7 +178,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
       spacing: { before: 200, after: 100 },
-      children: [rtlRun(`סיור פיקוח עליון מולטימדיה — ${data.projectName} — ${dateLabel}`, { bold: true, size: 32 })],
+      children: [rtlRun(data.tourName, { bold: true, size: 32 })],
     }),
     rtlParagraph({
       alignment: AlignmentType.CENTER,

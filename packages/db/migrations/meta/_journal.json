@@ -57,6 +57,13 @@
       "when": 1789813751437,
       "tag": "0007_smiling_doctor_octopus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789820986757,
+      "tag": "0008_true_ego",
+      "breakpoints": true
     }
   ]
 }

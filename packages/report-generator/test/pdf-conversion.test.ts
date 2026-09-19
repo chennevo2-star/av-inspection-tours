@@ -28,6 +28,7 @@ function sampleData(): InspectionReportData {
   return {
     officeName: "ל.שחר",
     logo: null,
+    tourName: 'טופס פיקוח עליון "מולטימדיה" Biocatch 08/09/2026',
     projectName: "Biocatch",
     projectAddress: "רחוב הברזל 3, תל אביב",
     inspectionNumber: 12,

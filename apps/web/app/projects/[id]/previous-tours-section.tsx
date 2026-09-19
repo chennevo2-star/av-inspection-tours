@@ -31,7 +31,7 @@ function TourRow({
   projectName: string;
   deletable?: boolean;
 }) {
-  const tourName = formatTourName(inspection.date, projectName);
+  const tourName = formatTourName(inspection.date, projectName, inspection.categories);
   return (
     <li className={styles.item}>
       <div className={styles.itemHeader}>

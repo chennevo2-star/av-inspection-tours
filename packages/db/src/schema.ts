@@ -128,6 +128,8 @@ export const inspections = pgTable("inspections", {
   // report screen's local React state) -- see shared-types Inspection's own comment on these two fields.
   generalText: text("general_text"),
   summaryText: text("summary_text"),
+  // The tour's discipline(s) (user request) -- see shared-types Inspection's own comment.
+  categories: jsonb("categories").$type<string[]>().notNull().default([]),
 });
 
 export const contextEvents = pgTable("context_events", {

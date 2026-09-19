@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
+import { TourCategory } from "@av-inspection/shared-types";
 import { getActiveInspectionForProject, startInspection } from "../../../lib/db/inspections";
 import { listInspectors } from "../../../lib/db/inspectors";
 import { formatTourName } from "../../../lib/format-tour-name";
@@ -30,7 +31,17 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
   const [inspectorId, setInspectorId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<string[]>([]);
   const [participantInput, setParticipantInput] = useState("");
+  const [categories, setCategories] = useState<Set<TourCategory>>(new Set());
   const [starting, setStarting] = useState(false);
+
+  function toggleCategory(category: TourCategory) {
+    setCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }
 
   const inspectorBank = useLiveQuery(listInspectors, []);
 
@@ -78,7 +89,7 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
 
   async function handleStart() {
     const name = inspector.trim();
-    if (!name) return;
+    if (!name || categories.size === 0) return;
     setStarting(true);
     try {
       try {
@@ -86,7 +97,7 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
       } catch {
         // Same as above — non-fatal.
       }
-      const inspection = await startInspection(projectId, name, participants, inspectorId);
+      const inspection = await startInspection(projectId, name, participants, inspectorId, [...categories]);
       router.push(`/tour/${inspection.id}`);
     } finally {
       setStarting(false);
@@ -101,7 +112,7 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
         <div style={{ marginBottom: 16 }}>
           <p className={styles.emptyHint}>יש סיור פתוח שטרם הסתיים.</p>
           <button className={styles.addButton} onClick={() => router.push(`/tour/${activeInspection.id}`)}>
-            ▶ המשך {formatTourName(activeInspection.date, projectName)}
+            ▶ המשך {formatTourName(activeInspection.date, projectName, activeInspection.categories)}
           </button>
         </div>
       ) : null}
@@ -112,6 +123,31 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
             או התחל סיור נוסף:
           </p>
         ) : null}
+        <p className={styles.emptyHint} style={{ margin: "0 0 6px" }}>
+          קטגוריית הסיור:
+        </p>
+        <div className={styles.aliasRow} style={{ marginBottom: 12 }}>
+          {TourCategory.options.map((category) => (
+            <label
+              key={category}
+              className={styles.aliasChip}
+              style={{
+                cursor: "pointer",
+                borderColor: categories.has(category) ? "var(--accent)" : undefined,
+                color: categories.has(category) ? "var(--accent)" : undefined,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={categories.has(category)}
+                onChange={() => toggleCategory(category)}
+                style={{ marginLeft: 4 }}
+              />
+              {category}
+            </label>
+          ))}
+        </div>
+
         {inspectorBank && inspectorBank.length > 0 ? (
           <div className={styles.aliasRow} style={{ marginBottom: 8 }}>
             {inspectorBank.map((candidate) => (
@@ -165,7 +201,11 @@ export function TourSection({ projectId, projectName }: { projectId: string; pro
           </div>
         ) : null}
 
-        <button className={styles.addButton} onClick={handleStart} disabled={starting || !inspector.trim()}>
+        <button
+          className={styles.addButton}
+          onClick={handleStart}
+          disabled={starting || !inspector.trim() || categories.size === 0}
+        >
           🚶 התחל סיור חדש
         </button>
       </>
