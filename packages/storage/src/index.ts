@@ -1,9 +1,25 @@
 import path from "node:path";
+import { appSettings, getDb } from "@av-inspection/db";
+import { eq } from "drizzle-orm";
 import { GraphAuth } from "./graph-auth.js";
 import { LocalFsStorage } from "./local-fs-storage.js";
 import { MsGraphStorage } from "./ms-graph-storage.js";
 import { S3Storage } from "./s3-storage.js";
 import type { ObjectStorage } from "./types.js";
+
+/** The `app_settings` row key the storage folder picker (apps/web/app/settings) writes to and
+ * `MsGraphStorage`'s `rootFolderOverrideProvider` reads from -- see MsGraphStorageConfig's own comment. */
+export const STORAGE_ROOT_FOLDER_SETTING_KEY = "storageRootFolder";
+
+async function readStorageRootFolderOverride(): Promise<string | null> {
+  const rows = await getDb()
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, STORAGE_ROOT_FOLDER_SETTING_KEY))
+    .limit(1);
+  const value = rows[0]?.value;
+  return typeof value === "string" && value.trim() ? value : null;
+}
 
 export type { ObjectStorage } from "./types.js";
 export { LocalFsStorage } from "./local-fs-storage.js";
@@ -76,6 +92,7 @@ export function getStorage(): ObjectStorage {
       sitePath,
       driveName: process.env.MS_GRAPH_DRIVE_NAME ?? "Documents",
       rootFolder: process.env.MS_GRAPH_ROOT_FOLDER ?? "סיורי פיקוח",
+      rootFolderOverrideProvider: readStorageRootFolderOverride,
     });
     return _storage;
   }

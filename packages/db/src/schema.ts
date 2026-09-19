@@ -243,6 +243,20 @@ export const aiExtractionStatusEnum = pgEnum("ai_extraction_status", [
 ]);
 
 /**
+ * Small shared key/value store for settings that must be the same for every device/team member (unlike
+ * apps/web/lib/db/settings.ts, which is a PER-DEVICE IndexedDB preference store) -- e.g. the SharePoint
+ * folder picked via the storage settings screen (packages/storage's `MsGraphStorage` reads it as an
+ * override for the env-var-configured default). Deliberately generic (one row per key) rather than a
+ * dedicated column/table per setting, since this is expected to grow with a handful more similarly-shaped
+ * settings over time, not warrant its own migration each time.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * One AI-pipeline run for an inspection (spec §22–23, AI_PIPELINE.md). `rawExtraction` is the validated
  * (schema-checked + enforceKnownEntityIds-guarded) InspectionExtraction JSON — always a Draft, never
  * auto-applied (spec §23). Multiple rows per inspection are allowed (e.g. a re-run after a failure); the

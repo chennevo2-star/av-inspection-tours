@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@av-inspection/shared-types": "*",
+    "@av-inspection/db": "*",
     "@aws-sdk/client-s3": "^3.629.0",
     "@aws-sdk/s3-request-presigner": "^3.629.0"
   },

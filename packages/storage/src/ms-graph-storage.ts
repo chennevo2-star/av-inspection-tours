@@ -75,8 +75,15 @@ export interface MsGraphStorageConfig {
    * disambiguates which one. */
   driveName: string;
   /** Configurable base folder name inside that drive (spec requirement -- not hardcoded), e.g.
-   * "סיורי פיקוח". */
+   * "סיורי פיקוח". Used whenever `rootFolderOverrideProvider` (below) is unset or resolves to null. */
   rootFolder: string;
+  /** Resolves a team-wide override for `rootFolder`, set via the storage settings screen's SharePoint
+   * folder picker (apps/web/app/settings) -- lets the destination folder change without a redeploy. A
+   * plain async callback (not a DB import here) so this package stays storage-only; `index.ts`'s
+   * `getStorage()` is what actually wires it to `@av-inspection/db`. Resolved once per process and cached
+   * (same pattern as `resolveDriveId()` below) -- a changed setting takes effect on the next cold start,
+   * which matches how the site/drive resolution already behaves and avoids a DB round-trip per upload. */
+  rootFolderOverrideProvider?: () => Promise<string | null>;
   /** Overridable for tests; defaults to the real Graph v1.0 endpoint. */
   graphBaseUrl?: string;
   /** Overridable for tests; defaults to `UPLOAD_CHUNK_SIZE_BYTES`. */
@@ -224,6 +231,8 @@ export class MsGraphStorage implements ObjectStorage {
   private driveId: string | null = null;
   /** De-dupes concurrent drive-resolution calls the same way GraphAuth de-dupes token refreshes. */
   private driveIdResolution: Promise<string> | null = null;
+  private rootFolder: string | null = null;
+  private rootFolderResolution: Promise<string> | null = null;
 
   constructor(private readonly config: MsGraphStorageConfig) {
     this.baseUrl = config.graphBaseUrl ?? "https://graph.microsoft.com/v1.0";
@@ -278,6 +287,24 @@ export class MsGraphStorage implements ObjectStorage {
     throw new Error(
       "MsGraphStorage requires either MS_GRAPH_SITE_ID or both MS_GRAPH_SITE_HOSTNAME and MS_GRAPH_SITE_PATH"
     );
+  }
+
+  /** Same lazy-once-then-cached pattern as `resolveDriveId()` just below -- see `rootFolderOverrideProvider`
+   * on `MsGraphStorageConfig` for why this exists and why it's resolved (at most) once per process. */
+  private async getRootFolder(): Promise<string> {
+    if (this.rootFolder) return this.rootFolder;
+    if (!this.rootFolderResolution) {
+      this.rootFolderResolution = (async () => {
+        const override = await this.config.rootFolderOverrideProvider?.();
+        this.rootFolder = override && override.trim() ? override.trim() : this.config.rootFolder;
+        return this.rootFolder;
+      })();
+    }
+    try {
+      return await this.rootFolderResolution;
+    } finally {
+      this.rootFolderResolution = null;
+    }
   }
 
   private async resolveDriveId(): Promise<string> {
@@ -382,8 +409,9 @@ export class MsGraphStorage implements ObjectStorage {
    * Project / visit folder structure
    * -------------------------------------------------------------------------------------------- */
 
-  private projectRootPath(projectName: string): string {
-    return `${this.config.rootFolder}/${PROJECTS_SEGMENT}/${sanitizeFilename(projectName)}`;
+  private async projectRootPath(projectName: string): Promise<string> {
+    const rootFolder = await this.getRootFolder();
+    return `${rootFolder}/${PROJECTS_SEGMENT}/${sanitizeFilename(projectName)}`;
   }
 
   /**
@@ -394,7 +422,7 @@ export class MsGraphStorage implements ObjectStorage {
    */
   async ensureProjectFolders(project: Pick<Project, "name">): Promise<ProjectFolderSet> {
     const driveId = await this.resolveDriveId();
-    const projectPath = this.projectRootPath(project.name);
+    const projectPath = await this.projectRootPath(project.name);
     const root = await this.ensureFolderPath(projectPath);
     const dataFolder = await this.ensureFolder(`${projectPath}/${PROJECT_DATA_SEGMENT}`);
     const visitsFolder = await this.ensureFolder(`${projectPath}/${VISITS_SEGMENT}`);
@@ -467,7 +495,7 @@ export class MsGraphStorage implements ObjectStorage {
     project: Pick<Project, "name">,
     visit: Pick<Inspection, "id" | "date">
   ): Promise<VisitFolderSet> {
-    const projectPath = this.projectRootPath(project.name);
+    const projectPath = await this.projectRootPath(project.name);
     const visitsRoot = `${projectPath}/${VISITS_SEGMENT}`;
     await this.ensureFolderPath(visitsRoot);
 
@@ -542,11 +570,14 @@ export class MsGraphStorage implements ObjectStorage {
 
   /** Strips this instance's `rootFolder` prefix off a drive-root-relative path, producing exactly what
    * `get()`/`getSignedGetUrl()`/`delete()` (the plain `ObjectStorage` interface, keyed relative to
-   * `rootFolder` — see those methods' own `${this.config.rootFolder}/${key}` construction) expect back as
-   * `key`. Falls back to the untouched path if it somehow doesn't start with `rootFolder` (defensive only
-   * — every call site here always builds paths under `rootFolder`, so this should never actually trigger). */
+   * `rootFolder` — see those methods' own `${rootFolder}/${key}` construction) expect back as `key`.
+   * Sync, using the cached `this.rootFolder` rather than `await getRootFolder()`: every call site reaches
+   * this only after already resolving it earlier in the same call chain (`uploadSimple`/`uploadResumable`
+   * build `path` from a `folderPath` that came from `projectRootPath()` or `put()`, both of which already
+   * awaited it), so the cache is always populated by this point. Falls back to the configured default if
+   * somehow called before that (defensive only — should never actually trigger). */
   private toRelativeKey(path: string): string {
-    const prefix = `${this.config.rootFolder}/`;
+    const prefix = `${this.rootFolder ?? this.config.rootFolder}/`;
     return path.startsWith(prefix) ? path.slice(prefix.length) : path;
   }
 
@@ -703,16 +734,18 @@ export class MsGraphStorage implements ObjectStorage {
 
   async put(key: string, body: Buffer | Uint8Array, contentType: string): Promise<void> {
     const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body);
+    const rootFolder = await this.getRootFolder();
     const { folder, filename } = splitKey(key);
-    const folderPath = folder ? `${this.config.rootFolder}/${folder}` : this.config.rootFolder;
+    const folderPath = folder ? `${rootFolder}/${folder}` : rootFolder;
     if (folder) await this.ensureFolderPath(folderPath);
-    else await this.ensureFolderPath(this.config.rootFolder);
+    else await this.ensureFolderPath(rootFolder);
     await this.uploadFile(folderPath, filename, buffer, contentType);
   }
 
   async get(key: string): Promise<Buffer> {
     const driveId = await this.resolveDriveId();
-    const path = `${this.config.rootFolder}/${key}`;
+    const rootFolder = await this.getRootFolder();
+    const path = `${rootFolder}/${key}`;
     const url = `/drives/${driveId}/root:/${this.encodePath(path)}:/content`;
     const response = await this.rawFetch(url);
     if (!response.ok) throw await this.graphError(response);
@@ -725,14 +758,16 @@ export class MsGraphStorage implements ObjectStorage {
    * signature with `S3Storage`; a SharePoint `webUrl` doesn't expire, so it's unused. */
   async getSignedGetUrl(key: string, _expiresInSeconds?: number): Promise<string> {
     const driveId = await this.resolveDriveId();
-    const path = `${this.config.rootFolder}/${key}`;
+    const rootFolder = await this.getRootFolder();
+    const path = `${rootFolder}/${key}`;
     const item = await this.graphJson<GraphDriveItem>(`/drives/${driveId}/root:/${this.encodePath(path)}`);
     return item.webUrl;
   }
 
   async delete(key: string): Promise<void> {
     const driveId = await this.resolveDriveId();
-    const path = `${this.config.rootFolder}/${key}`;
+    const rootFolder = await this.getRootFolder();
+    const path = `${rootFolder}/${key}`;
     const response = await this.rawFetch(`/drives/${driveId}/root:/${this.encodePath(path)}`, {
       method: "DELETE",
     });
