@@ -1,0 +1,238 @@
+/* Shared between new-task-wizard.tsx and edit-task-modal.tsx (extracted 2026-09-19: identical UI, two
+   real callers now, not a hypothetical future one). */
+
+.floorList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.floorButton {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: right;
+  display: flex;
+  justify-content: space-between;
+}
+
+.floorButtonActive {
+  outline: 2px solid var(--accent);
+}
+
+.roomGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 4px 4px;
+}
+
+.roomChip {
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 15px;
+}
+
+.roomChipActive {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.skipHint {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.photoThumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.photoThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.removePhotoButton {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.addPhotoButton {
+  width: 100%;
+  background: var(--surface);
+  border: 2px dashed var(--surface-2);
+  border-radius: 14px;
+  padding: 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.descriptionArea {
+  width: 100%;
+  min-height: 160px;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.dictateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dictateButton {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dictateButtonListening {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.dictateHint {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Responsible: grouped checkbox list -- mirrors projects/[id]/contractor-picker-modal.module.css */
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.filterChip {
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.filterChipActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+.responsibleGroup {
+  margin-bottom: 16px;
+}
+
+.groupTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.responsibleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.responsibleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.responsibleRowSelected {
+  border-color: var(--accent);
+}
+
+.responsibleRow input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.responsibleRowName {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.addParticipantRow {
+  display: flex;
+  gap: 8px;
+}
+
+.addParticipantRow input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+.addParticipantRow button {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+}

@@ -75,15 +75,14 @@ export async function closeTask(id: string, closedInspectionId: string): Promise
 }
 
 /**
- * Field-text edits made on the report screen's task table (user request: those edits must actually save
- * back to the real task, not just shape one export) -- deliberately narrow to the fields the report
- * screen's row editor actually exposes as real Task columns (description/responsibleParties/status);
- * floorName/roomName there are display-only derived strings with no direct write path back to
- * Floor/Room, so they're never accepted here.
+ * Field edits made from either the report screen's row editor (description/responsibleParties/status
+ * only -- its floorName/roomName are display-only derived strings with no direct write path back to
+ * Floor/Room) or the tasks table's full edit screen (user request, 2026-09-19: every field a task has
+ * should be editable there, including its floor/room, not just these three).
  */
 export async function updateTask(
   id: string,
-  patch: Partial<Pick<Task, "description" | "responsibleParties" | "status">>
+  patch: Partial<Pick<Task, "description" | "responsibleParties" | "status" | "floorId" | "roomId">>
 ): Promise<Task> {
   const db = getLocalDb();
   const existing = await db.tasks.get(id);

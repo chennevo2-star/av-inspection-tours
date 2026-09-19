@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { getDb, inspections, projects, tasks } from "@av-inspection/db";
+import { getDb, inspections, projects, tasks, photos } from "@av-inspection/db";
+import { getStorage } from "@av-inspection/storage";
 import { ensureDbReady } from "../../../../../lib/server/ensure-db-ready";
 
 /**
@@ -26,6 +27,18 @@ const DELETE_HANDLERS: Partial<Record<string, (id: string) => Promise<void>>> = 
   },
   Project: async (id) => {
     await getDb().delete(projects).where(eq(projects.id, id));
+  },
+  // Real bug closed here (user request, 2026-09-19: deleting a photo from the task edit screen must
+  // actually delete it, not just hide it locally) -- Photo carries a real uploaded file (see
+  // file-sync-entities.ts), so deleting the DB row alone would leave it orphaned in cloud storage
+  // forever. `cloudFileId` is null for a photo that was captured but never finished syncing yet (still
+  // LOCAL_ONLY/WAITING_FOR_SYNC) -- nothing to delete remotely in that case, the DB row delete is enough.
+  Photo: async (id) => {
+    const [row] = await getDb().select({ cloudFileId: photos.cloudFileId }).from(photos).where(eq(photos.id, id));
+    if (row?.cloudFileId) {
+      await getStorage().delete(row.cloudFileId);
+    }
+    await getDb().delete(photos).where(eq(photos.id, id));
   },
 };
 

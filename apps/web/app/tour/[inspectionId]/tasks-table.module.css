@@ -55,6 +55,7 @@
   background: var(--surface);
   border-radius: 16px;
   padding: 14px 16px;
+  cursor: pointer;
 }
 
 .cardTop {

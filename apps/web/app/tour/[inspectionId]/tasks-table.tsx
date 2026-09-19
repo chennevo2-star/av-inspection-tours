@@ -6,6 +6,7 @@ import type { Photo, Task } from "@av-inspection/shared-types";
 import { getLocalDb } from "../../../lib/db/local-db";
 import { deleteTask, listTasksForInspection } from "../../../lib/db/tasks";
 import { getPhotoBlob } from "../../../lib/db/photos";
+import { EditTaskModal } from "./edit-task-modal";
 import styles from "./tasks-table.module.css";
 
 async function handleDeleteTask(task: Task) {
@@ -21,11 +22,14 @@ async function handleDeleteTask(task: Task) {
  * overlay like the wizard, not a separate route, so it can be opened/closed instantly without losing the
  * main tour screen's state. Deletion here is real (user request: deleting a task here or from the summary
  * report removes it in both) -- this list is live-queried, so a delete from either screen is reflected the
- * next time this one is opened. */
+ * next time this one is opened. Clicking a card (user request, 2026-09-19: every field a task has should
+ * be editable, including adding photos) opens EditTaskModal for that task -- everywhere except the
+ * delete button itself, which stops the click from also opening edit. */
 export function TasksTable({ inspectionId, onClose }: { inspectionId: string; onClose: () => void }) {
   const tasks = useLiveQuery(() => listTasksForInspection(inspectionId), [inspectionId]);
   const floors = useLiveQuery(() => getLocalDb().floors.toArray(), []);
   const rooms = useLiveQuery(() => getLocalDb().rooms.toArray(), []);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const floorNames = new Map((floors ?? []).map((f) => [f.id, f.name]));
   const roomNames = new Map((rooms ?? []).map((r) => [r.id, r.name]));
@@ -52,16 +56,31 @@ export function TasksTable({ inspectionId, onClose }: { inspectionId: string; on
                 task={task}
                 floorName={task.floorId ? floorNames.get(task.floorId) : undefined}
                 roomName={task.roomId ? roomNames.get(task.roomId) : undefined}
+                onEdit={() => setEditingTask(task)}
               />
             ))}
           </ul>
         )}
       </div>
+
+      {editingTask ? (
+        <EditTaskModal task={editingTask} projectId={editingTask.projectId} onClose={() => setEditingTask(null)} />
+      ) : null}
     </div>
   );
 }
 
-function TaskCard({ task, floorName, roomName }: { task: Task; floorName?: string; roomName?: string }) {
+function TaskCard({
+  task,
+  floorName,
+  roomName,
+  onEdit,
+}: {
+  task: Task;
+  floorName?: string;
+  roomName?: string;
+  onEdit: () => void;
+}) {
   const photos = useLiveQuery(
     () => getLocalDb().photos.where("taskId").equals(task.id).toArray(),
     [task.id]
@@ -70,7 +89,7 @@ function TaskCard({ task, floorName, roomName }: { task: Task; floorName?: strin
   const location = [floorName, roomName].filter(Boolean).join(" · ");
 
   return (
-    <li className={styles.card}>
+    <li className={styles.card} onClick={onEdit} role="button" tabIndex={0}>
       <div className={styles.cardTop}>
         <span className={styles.taskNumber}>#{task.friendlyNumber}</span>
         {location ? <span className={styles.location}>{location}</span> : null}
@@ -78,7 +97,10 @@ function TaskCard({ task, floorName, roomName }: { task: Task; floorName?: strin
         <button
           type="button"
           className={styles.deleteButton}
-          onClick={() => void handleDeleteTask(task)}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleDeleteTask(task);
+          }}
           aria-label={`מחק משימה #${task.friendlyNumber}`}
         >
           🗑️
