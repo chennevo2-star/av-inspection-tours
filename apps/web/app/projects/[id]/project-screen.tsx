@@ -9,13 +9,15 @@ import { updateProject } from "../../../lib/db/projects";
 import { useMounted } from "../../../lib/hooks/use-mounted";
 import { ContractorsSection } from "./contractors-section";
 import { FloorsSection } from "./floors-section";
+import { PreviousToursSection } from "./previous-tours-section";
 import { TourSection } from "./tour-section";
 import styles from "./project-screen.module.css";
 
 /**
  * Project screen (spec §8). Now covers: סיור חדש/המשך סיור (Phase 3), settings
- * (name/number/client/address/description), Contractors, Floors&Rooms. Still deliberately omits
- * סיורים קודמים / משימות פתוחות (as their own dedicated views) / תמונות / דוחות — task-closing (§27) is
+ * (name/number/client/address/description), Contractors, Floors&Rooms, and סיורים קודמים (user request:
+ * reach a past tour of this project again, or of the same client across other projects). Still
+ * deliberately omits משימות פתוחות (as its own dedicated view) / תמונות / דוחות — task-closing (§27) is
  * reachable from inside an active tour's ✅ panel, but a standalone project-level task/report/photo
  * history browser is Phase 6+ (Review UI) / Phase 8 (Reports) territory; a stub tab for those now would
  * be exactly the kind of mock-success CLAUDE.md forbids.
@@ -109,6 +111,7 @@ function ProjectBody({ project }: { project: Project }) {
       </p>
 
       <TourSection projectId={project.id} />
+      <PreviousToursSection project={project} />
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>הגדרות פרויקט</h2>

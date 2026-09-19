@@ -1,4 +1,4 @@
-import { Inspection } from "@av-inspection/shared-types";
+import { Inspection, type Project } from "@av-inspection/shared-types";
 import { getLocalDb } from "./local-db";
 import { enqueueSync } from "../sync/enqueue";
 
@@ -83,6 +83,45 @@ export async function getActiveInspectionForProject(projectId: string): Promise<
 export async function getAnyActiveInspection(): Promise<Inspection | undefined> {
   const rows = await getLocalDb().inspections.filter((i) => i.endTime === null).toArray();
   return rows.sort((a, b) => b.startTime.localeCompare(a.startTime))[0];
+}
+
+/** Every inspection ever started on this project, device-local, newest first — powers the project
+ * screen's "סיורים קודמים" section (user request: reach past tours again, not just resume the open one). */
+export async function listInspectionsForProject(projectId: string): Promise<Inspection[]> {
+  const rows = await getLocalDb().inspections.where("projectId").equals(projectId).toArray();
+  return rows.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+}
+
+/**
+ * Inspections from OTHER projects that share the same client (user request: "same client", not just
+ * "same project" — a client often spans several projects over time, e.g. separate buildings/phases).
+ * `Project.client` is free text with no alias/normalization table (unlike Contractor/ContractorAlias),
+ * so this only matches an exact, trimmed string — a real "Client" entity with aliases would be the
+ * proper fix for spelling variants, but that's a bigger change than this request asked for.
+ */
+export async function listInspectionsForClient(
+  client: string,
+  excludeProjectId: string
+): Promise<Array<{ inspection: Inspection; project: Project }>> {
+  const trimmedClient = client.trim();
+  if (!trimmedClient) return [];
+
+  const db = getLocalDb();
+  const matchingProjects = await db.projects
+    .filter((p) => p.id !== excludeProjectId && (p.client ?? "").trim() === trimmedClient)
+    .toArray();
+  if (matchingProjects.length === 0) return [];
+
+  const projectById = new Map(matchingProjects.map((p) => [p.id, p]));
+  const rows = await db.inspections.where("projectId").anyOf([...projectById.keys()]).toArray();
+
+  return rows
+    .map((inspection) => ({ inspection, project: projectById.get(inspection.projectId)! }))
+    .sort(
+      (a, b) =>
+        b.inspection.date.localeCompare(a.inspection.date) ||
+        b.inspection.startTime.localeCompare(a.inspection.startTime)
+    );
 }
 
 export async function endInspection(id: string): Promise<Inspection> {
