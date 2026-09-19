@@ -27,6 +27,11 @@ export interface InspectionReportData {
    * 01/02/2026`) -- computed once by the assembling side (apps/web's format-tour-name.ts) so this
    * package never needs to know the category-list/quoting rules itself, only how to print a string. */
   tourName: string;
+  /** The cover page's subtitle line, directly under `tourName` -- this is where the tour's category/ies
+   * actually show up (the big title itself deliberately doesn't carry them, see apps/web's
+   * formatReportTitle/formatReportSubtitle for why and how this is built). Already fully formatted
+   * plain text, same as `tourName` -- this package only knows how to print a string. */
+  reportSubtitle: string;
   projectName: string;
   projectAddress: string | null;
   inspectionNumber: number;

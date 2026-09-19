@@ -23,3 +23,29 @@ export function formatTourName(dateIso: string, projectName: string, categories:
   const categoryPart = categories.length > 0 ? ` ${formatCategoryList(categories)}` : "";
   return `טופס פיקוח עליון${categoryPart} ${projectName} ${dateLabel}`;
 }
+
+/**
+ * The report's own large cover-page title (user request, 2026-09-19: the big heading shouldn't carry the
+ * tour's categories at all -- just office form name, client, date; the categories move to
+ * `formatReportSubtitle` below, on the line underneath). Deliberately separate from `formatTourName`
+ * above, which keeps showing categories inline everywhere else in the app (tour lists, headers, the
+ * "continue tour" banner) -- those are plain single-line UI labels with no natural second line to move
+ * a category segment to, so that established, already-shipped behavior is left alone here.
+ * Dash-separated (not just spaces) so a client name in English never sits directly adjacent to Hebrew
+ * text with no visual break between them.
+ */
+export function formatReportTitle(dateIso: string, projectName: string): string {
+  const dateLabel = new Date(dateIso).toLocaleDateString("he-IL", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return `טופס פיקוח עליון - ${projectName} - ${dateLabel}`;
+}
+
+/**
+ * The report cover's subtitle line, directly under the title -- now where the tour's categories actually
+ * live (see formatReportTitle's own comment). Falls back to the old generic line for a tour that predates
+ * the categories feature (empty `categories`), matching how every other empty-categories case in this
+ * app degrades gracefully rather than rendering something visibly broken.
+ */
+export function formatReportSubtitle(categories: string[]): string {
+  if (categories.length === 0) return "דו״ח פיקוח עליון – מערכות מולטימדיה";
+  return `דו״ח פיקוח עליון – ${formatCategoryList(categories)}`;
+}

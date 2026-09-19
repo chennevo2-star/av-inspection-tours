@@ -7,6 +7,7 @@ function sampleData(): InspectionReportData {
     officeName: "ל.שחר",
     logo: { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]), mimeType: "image/png" },
     tourName: 'טופס פיקוח עליון "מולטימדיה" Biocatch 08/09/2026',
+    reportSubtitle: "דו״ח פיקוח עליון – מערכות מולטימדיה",
     projectName: "Biocatch",
     projectAddress: null,
     inspectionNumber: 12,

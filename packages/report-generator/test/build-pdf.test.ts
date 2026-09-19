@@ -17,6 +17,7 @@ interface TextItem {
   str: string;
   x: number;
   y: number;
+  width: number;
 }
 
 /**
@@ -81,6 +82,7 @@ function sampleData(overrides: Partial<InspectionReportData> = {}): InspectionRe
     officeName: "ל.שחר",
     logo: null,
     tourName: 'טופס פיקוח עליון "מולטימדיה" Biocatch 08/09/2026',
+    reportSubtitle: "דו״ח פיקוח עליון – מערכות מולטימדיה",
     projectName: "Biocatch",
     projectAddress: "רחוב הברזל 3, תל אביב",
     inspectionNumber: 12,
@@ -177,11 +179,13 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const items = await extractTextItems(buffer);
 
     // "פרויקט" (label) must render to the RIGHT of "B2tech" (its value) -- reading right-to-left, the
-    // label comes first. A word-order bug would put B2tech on the right instead. Matches ": B2tech"
-    // specifically (not the bare project name, which also appears later in the page footer).
+    // label comes first. A word-order bug would put B2tech on the right instead. "B2tech" is now its own
+    // extracted item (a space is always its own atomic run, see splitScriptRuns' own comment), and it
+    // also appears later in the page footer -- the metadata line's occurrence is the topmost (highest y).
     const xLabel = xOf(items, "פרויקט");
-    const xValue = xOf(items, ": B2tech");
-    expect(xLabel).toBeGreaterThan(xValue);
+    const metaLineValue = items.filter((it) => it.str.includes("B2tech")).sort((a, b) => b.y - a.y)[0];
+    if (!metaLineValue) throw new Error('"B2tech" not found in extracted text items');
+    expect(xLabel).toBeGreaterThan(metaLineValue.x);
   });
 
   it("puts the cover title's date at the true leftmost position even when the project name is in English (user report, 2026-09-19: date wasn't consistently 'last' depending on the project name's script)", async () => {
@@ -236,6 +240,22 @@ describe("buildInspectionReportPdf — real PDF output via pdf-lib, no LibreOffi
     const xWord3 = xOf(items, "בחיבור");
     expect(xWord1).toBeGreaterThan(xCrestron);
     expect(xCrestron).toBeGreaterThan(xWord3);
+  });
+
+  it("keeps a real gap between a Hebrew word and an immediately-following English word (real bug, 2026-09-19: a real exported title showed \"מולטימדיהB2tech\" glued with no space -- root-caused to splitScriptRuns attaching a space to whichever run comes AFTER it, which lands on the wrong side once toVisualOrder reverses run order)", async () => {
+    const doc = await buildInspectionReportPdf(
+      sampleData({ tasks: [], generalText: "בדיקה B2tech נוספת", summaryText: "", participants: [] })
+    );
+    const buffer = await packPdfToBuffer(doc);
+    const items = await extractTextItems(buffer);
+
+    const hebrewWord = items.find((it) => it.str === "בדיקה");
+    const englishWord = items.find((it) => it.str === "B2tech");
+    if (!hebrewWord || !englishWord) throw new Error("expected both בדיקה and B2tech as separate extracted items");
+    // "B2tech" is the leftmost of the two (see the RTL-order tests above) -- the gap between its RIGHT
+    // edge and בדיקה's LEFT edge must be a real, positive space width, not ~0 (glued together).
+    const gap = hebrewWord.x - (englishWord.x + englishWord.width);
+    expect(gap).toBeGreaterThan(1);
   });
 
   it("puts each contractor in the responsible column on its own line (user request, 2026-09-19: newline-joined responsibleParty renders as separate lines, not one run of text)", async () => {

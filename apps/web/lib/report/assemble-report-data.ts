@@ -3,7 +3,7 @@ import { getLocalDb } from "../db/local-db";
 import { listTasksForInspection } from "../db/tasks";
 import { getPhotoBlob } from "../db/photos";
 import { getInspector, getInspectorStampBlob } from "../db/inspectors";
-import { formatTourName } from "../format-tour-name";
+import { formatReportTitle, formatReportSubtitle } from "../format-tour-name";
 import { LOGO_LSHACHAR_PNG_BASE64 } from "./logo-data";
 
 /** Fixed business fact, not per-project data — spec names this specific office. */
@@ -153,7 +153,8 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
   return {
     officeName: OFFICE_NAME,
     logo,
-    tourName: formatTourName(inspection.date, project.name, inspection.categories),
+    tourName: formatReportTitle(inspection.date, project.name),
+    reportSubtitle: formatReportSubtitle(inspection.categories),
     projectName: project.name,
     projectAddress: project.address,
     inspectionNumber: inspection.inspectionNumber,

@@ -8,6 +8,7 @@ function sampleData(overrides: Partial<InspectionReportData> = {}): InspectionRe
     officeName: "ל.שחר",
     logo: null,
     tourName: 'טופס פיקוח עליון "מולטימדיה" Biocatch 08/09/2026',
+    reportSubtitle: "דו״ח פיקוח עליון – מערכות מולטימדיה",
     projectName: "Biocatch",
     projectAddress: "רחוב הברזל 3, תל אביב",
     inspectionNumber: 12,

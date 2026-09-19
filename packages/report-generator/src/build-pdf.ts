@@ -198,27 +198,47 @@ interface ScriptRun {
 }
 
 /**
- * Splits a string into consecutive runs of "Hebrew-block characters" vs. everything else. Needed
- * because the one embedded Hebrew font here has no Latin/digit/punctuation glyphs at all (see the
- * file-level comment) -- every mixed line has to be drawn (and measured) as an alternating sequence of
- * runs, each in its own matching font, the same way real font-fallback works in any text engine.
+ * Splits a string into consecutive runs of "Hebrew-block characters" vs. everything else, with every
+ * space character always its OWN atomic run. Needed for two independent reasons:
+ *  1. the one embedded Hebrew font here has no Latin/digit/punctuation glyphs at all (see the file-level
+ *     comment) -- every mixed line has to be drawn (and measured) as an alternating sequence of runs,
+ *     each in its own matching font, the same way real font-fallback works in any text engine.
+ *  2. Real bug found here (user report, 2026-09-19: a real exported title showed "מולטימדיהB2tech" glued
+ *     together with no space). Before this fix, a space between a Hebrew word and a following non-Hebrew
+ *     word was classified non-Hebrew like the word after it, so it got absorbed as that run's LEADING
+ *     character -- fine for drawing in plain logical order, but `toVisualOrder`'s run-reversal (see its
+ *     own comment) moves whole runs as units, and a space glued to the FRONT of a run stays glued to its
+ *     front after reversal too, which is now the wrong side: it ends up at the outer edge of the whole
+ *     reversed sequence instead of between the two words it originally separated. Making every space its
+ *     own single-character run means reversal treats it symmetrically -- it stays between the same two
+ *     neighbors (now in the opposite order) regardless of which way the surrounding runs get reordered.
  */
 function splitScriptRuns(text: string): ScriptRun[] {
   const runs: ScriptRun[] = [];
   let current = "";
   let currentHebrew: boolean | null = null;
+  const flush = () => {
+    if (current) runs.push({ text: current, hebrew: currentHebrew ?? false });
+    current = "";
+    currentHebrew = null;
+  };
   for (const ch of text) {
+    if (ch === " ") {
+      flush();
+      runs.push({ text: " ", hebrew: false });
+      continue;
+    }
     const hebrew = isHebrewCodePoint(ch.codePointAt(0) ?? 0);
     if (currentHebrew === null || hebrew === currentHebrew) {
       current += ch;
       currentHebrew = hebrew;
     } else {
-      runs.push({ text: current, hebrew: currentHebrew });
+      flush();
       current = ch;
       currentHebrew = hebrew;
     }
   }
-  if (current) runs.push({ text: current, hebrew: currentHebrew ?? false });
+  flush();
   return runs;
 }
 
@@ -458,7 +478,7 @@ function drawCover(cursor: Cursor, fonts: FontSet, data: InspectionReportData, l
   drawCoverTitle(cursor.page, data.tourName, { left: CONTENT_LEFT, right: CONTENT_RIGHT }, cursor.y, 18, fonts);
   cursor.y -= 26;
 
-  drawAlignedLine(cursor.page, "דו״ח פיקוח עליון – מערכות מולטימדיה", { left: CONTENT_LEFT, right: CONTENT_RIGHT }, cursor.y, 12, fonts, {
+  drawAlignedLine(cursor.page, data.reportSubtitle, { left: CONTENT_LEFT, right: CONTENT_RIGHT }, cursor.y, 12, fonts, {
     color: MUTED_TEXT,
     align: "center",
   });

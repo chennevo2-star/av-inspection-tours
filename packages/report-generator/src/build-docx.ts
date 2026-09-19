@@ -206,7 +206,7 @@ export function buildInspectionReportDocument(data: InspectionReportData): Docum
     rtlParagraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 300 },
-      children: [rtlRun("דו״ח פיקוח עליון – מערכות מולטימדיה", { size: 24, color: "6B7280" })],
+      children: [rtlRun(data.reportSubtitle, { size: 24, color: "6B7280" })],
     })
   );
 
