@@ -1,7 +1,8 @@
-import { runMigrations } from "@av-inspection/db";
+import { runMigrations, resetDbHandleForNewRequest } from "@av-inspection/db";
 
 let migrationsPromise: Promise<void> | null = null;
 let hyperdriveBridged = false;
+let isWorkersRuntime = false;
 
 /**
  * On the Cloudflare Workers/edge deploy (apps/web/wrangler.jsonc), real Postgres isn't reachable via a
@@ -14,15 +15,20 @@ let hyperdriveBridged = false;
  * itself may not even resolve meaningfully) on the Container/local-dev paths, where this whole bridge is
  * correctly a no-op -- `process.env.DATABASE_URL` is already set directly there via `wrangler secret put`
  * / `.env.local`, and must keep working completely unchanged.
+ *
+ * Also sets `isWorkersRuntime` (module-level, survives past this function's own once-only guard below) --
+ * `ensureDbReady()` uses it every request, not just the first, to decide whether to force a fresh DB
+ * connection (see its own comment for the real bug that makes this necessary on Workers specifically).
  */
 async function bridgeHyperdriveConnectionString(): Promise<void> {
-  if (hyperdriveBridged || process.env.DATABASE_URL) return;
-  hyperdriveBridged = true; // only ever attempt this once, success or failure
+  if (hyperdriveBridged) return;
+  hyperdriveBridged = true; // only ever attempt the bridging itself once, success or failure
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = getCloudflareContext();
+    isWorkersRuntime = true;
     const hyperdrive = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE;
-    if (hyperdrive?.connectionString) {
+    if (hyperdrive?.connectionString && !process.env.DATABASE_URL) {
       process.env.DATABASE_URL = hyperdrive.connectionString;
     }
   } catch {
@@ -45,9 +51,19 @@ async function bridgeHyperdriveConnectionString(): Promise<void> {
  * process could run the exact same migrations against the exact same on-disk data with no error at all
  * -- proving the DB itself was fine and the bug was purely this cached-rejection logic. Clearing the
  * memo on failure lets the very next request retry instead of the whole server needing a restart.
+ *
+ * Second real bug found and fixed here, live, via `wrangler tail` against the deployed Worker: on the
+ * Workers/Hyperdrive path, a warm isolate reusing packages/db's cached connection across two DIFFERENT
+ * requests failed roughly half the time with "Cannot perform I/O on behalf of a different request" --
+ * Workers ties I/O objects like a live socket to the specific request that created them, even across
+ * requests the same warm isolate goes on to handle. `resetDbHandleForNewRequest()` forces a fresh
+ * connection at the start of every request on this path specifically (never on Container/local-dev, where
+ * a real persistent connection is correct and intended) -- this matches Cloudflare's own documented
+ * Hyperdrive + postgres.js pattern of creating the client fresh inside the request handler itself.
  */
 export async function ensureDbReady(migrate: () => Promise<void> = runMigrations): Promise<void> {
   await bridgeHyperdriveConnectionString();
+  if (isWorkersRuntime) resetDbHandleForNewRequest();
   if (!migrationsPromise) {
     migrationsPromise = migrate().catch((err) => {
       migrationsPromise = null;

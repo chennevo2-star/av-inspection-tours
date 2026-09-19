@@ -56,6 +56,23 @@ export function getDb(): DbHandle["db"] {
   return getHandle().db;
 }
 
+/**
+ * Discards the cached handle so the next `getDb()` call creates a brand new connection. A real bug was
+ * hit here, confirmed live via `wrangler tail` against the deployed Worker: on the Cloudflare Workers/
+ * Hyperdrive deploy path, a warm isolate handling a SECOND request that reused this module's cached
+ * `_handle` (and the postgres.js TCP connection inside it, created during the FIRST request) failed with
+ * "Cannot perform I/O on behalf of a different request" -- Workers ties I/O objects like a live socket to
+ * the specific request that created them, even across requests handled by the same warm isolate; a
+ * traditional long-lived Node process has no such boundary, which is exactly why this memoized-forever
+ * singleton was safe on the Container/local-dev path and simply never got exercised enough there to
+ * surface this. apps/web/lib/server/ensure-db-ready.ts calls this at the START of every request on the
+ * Workers path specifically (never on Container/local-dev, where a persistent connection is correct and
+ * desired) -- matches Cloudflare's own documented Hyperdrive + postgres.js pattern of creating a fresh
+ * client inside the request handler itself, not module-level. */
+export function resetDbHandleForNewRequest(): void {
+  _handle = null;
+}
+
 export function getDbDriver(): DbHandle["driver"] {
   return getHandle().driver;
 }
