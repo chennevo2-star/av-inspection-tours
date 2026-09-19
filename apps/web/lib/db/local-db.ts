@@ -248,6 +248,51 @@ export class LocalDb extends Dexie {
       syncMetadata: "key, projectId, entityType",
       syncQueue: "id, entityType, entityId, createdAt",
     });
+    // v8 (session's user request, 2026-09-19): a task can now be shared by MULTIPLE contractors --
+    // Task.responsibleParty (a single nullable string) became responsibleParties (string[]). Unlike
+    // every earlier version bump here, this ISN'T a purely additive change: code now reads
+    // task.responsibleParties.length/.join()/etc unconditionally, so an existing local row that still has
+    // the old field (and is missing the new one) would throw at runtime, not just show a blank value.
+    // `.upgrade()` runs once per device, real data preserved: an existing name becomes a one-element
+    // array, a null/missing one becomes `[]` -- the exact same conversion migration 0009 does server-side
+    // (packages/db/migrations/0009_odd_wasp.sql) for the same field on the same real production data.
+    this.version(8)
+      .stores({
+        projects: "id, status, updatedAt",
+        floors: "id, projectId, sortOrder",
+        rooms: "id, floorId",
+        contractors: "id, projectId",
+        contractorAliases: "id, contractorId, alias",
+        contractorBank: "id, companyName",
+        contractorCategories: "id, name",
+        inspections: "id, projectId, status, endTime",
+        contextEvents: "id, inspectionId, sequence, timestamp",
+        issues: "id, inspectionId, projectId, roomId, status, syncStatus",
+        tasks: "id, projectId, issueId, floorId, createdInspectionId, status, syncStatus, timestamp",
+        notes: "id, inspectionId, projectId, roomId, timestamp, syncStatus",
+        photos: "id, inspectionId, roomId, issueId, taskId, syncStatus",
+        photoBlobs: "id",
+        audio: "id, inspectionId, syncStatus",
+        audioChunks: "id, audioId, inspectionId, sequence, syncStatus",
+        audioChunkBlobs: "id",
+        inspectors: "id, name",
+        inspectorStampBlobs: "id",
+        attachments: "id, inspectionId, floorId, roomId, taskId, syncStatus",
+        attachmentBlobs: "id",
+        settings: "key",
+        syncMetadata: "key, projectId, entityType",
+        syncQueue: "id, entityType, entityId, createdAt",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("tasks")
+          .toCollection()
+          .modify((task: Task & { responsibleParty?: string | null }) => {
+            const legacy = task.responsibleParty;
+            task.responsibleParties = legacy ? [legacy] : [];
+            delete task.responsibleParty;
+          });
+      });
   }
 }
 

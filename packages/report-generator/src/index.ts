@@ -7,6 +7,8 @@ export type { InspectionReportData, ReportPhoto, ReportTaskRow } from "./types.j
 export { buildInspectionReportDocument } from "./build-docx.js";
 export { buildInspectionReportPdf } from "./build-pdf.js";
 export { buildInspectionReportXlsx } from "./build-xlsx.js";
+export type { WireInspectionReportData, WirePhoto, WireTaskRow } from "./wire-format.js";
+export { serializeReportDataForWire, deserializeReportDataFromWire } from "./wire-format.js";
 
 /**
  * A plain `Uint8Array`'s `.buffer` is typed as `ArrayBuffer | SharedArrayBuffer` (it's a *view*, which

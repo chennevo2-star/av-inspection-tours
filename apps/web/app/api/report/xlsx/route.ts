@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildInspectionReportXlsx, packXlsxToBuffer } from "@av-inspection/report-generator";
-import type { InspectionReportData } from "@av-inspection/report-generator";
+import { buildInspectionReportXlsx, packXlsxToBuffer, deserializeReportDataFromWire } from "@av-inspection/report-generator";
+import type { WireInspectionReportData } from "@av-inspection/report-generator";
 import { toArrayBuffer } from "../to-array-buffer";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /** Same loose shape check as docx-to-pdf/route.ts -- no existing zod schema for this type to reuse. */
-function isLikelyInspectionReportData(value: unknown): value is InspectionReportData {
+function isLikelyInspectionReportData(value: unknown): value is WireInspectionReportData {
   return (
     !!value &&
     typeof value === "object" &&
-    Array.isArray((value as InspectionReportData).tasks) &&
-    typeof (value as InspectionReportData).projectName === "string"
+    Array.isArray((value as WireInspectionReportData).tasks) &&
+    typeof (value as WireInspectionReportData).projectName === "string"
   );
 }
 
@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const workbook = buildInspectionReportXlsx(body);
+    // Reverses serializeReportDataForWire's base64 encoding of every ReportPhoto's bytes -- see
+    // wire-format.ts's own doc comment for the real silent-data-loss bug this closes.
+    const workbook = buildInspectionReportXlsx(deserializeReportDataFromWire(body));
     const bytes = packXlsxToBuffer(workbook);
     return new NextResponse(toArrayBuffer(bytes), { status: 200, headers: { "Content-Type": XLSX_MIME } });
   } catch (err) {

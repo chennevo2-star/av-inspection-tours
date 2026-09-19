@@ -25,11 +25,11 @@ describe("assembleReportData — real IndexedDB read-out into InspectionReportDa
     expect(data.inspectionDate).toBe(inspection.date);
     expect(data.participants).toEqual(["דני", "יוני"]);
     expect(data.tasks).toEqual([]);
-    // No real logo file exists yet (see assemble-report-data.ts) -- and under plain Node/vitest there's
-    // no browser origin for a relative fetch() to resolve against either way, so this also exercises
-    // loadLogo()'s "never throw, degrade to null" contract, just via a different failure path than the
-    // real-browser 404 it'll hit today.
-    expect(data.logo).toBeNull();
+    // The logo is embedded (logo-data.ts), never fetched over the network -- always present, real PNG
+    // bytes, regardless of environment (this test's own plain-Node/vitest run included).
+    expect(data.logo).not.toBeNull();
+    expect(data.logo?.mimeType).toBe("image/png");
+    expect(data.logo?.bytes.subarray(0, 8)).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     // No inspector was picked from the bank -- falls back to the plain typed name, no stamp.
     expect(data.inspectorName).toBe("דני");
     expect(data.inspectorStamp).toBeNull();
@@ -92,7 +92,7 @@ describe("assembleReportData — real IndexedDB read-out into InspectionReportDa
       description: "אין HDMI",
       floorId: floor30.id,
       roomId: room30.id,
-      responsibleParty: "סינמה",
+      responsibleParties: ["סינמה"],
     });
     const taskGround = await createTask({
       projectId: project.id,

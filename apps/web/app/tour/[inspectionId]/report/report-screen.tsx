@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { TaskStatus } from "@av-inspection/shared-types";
 import type { InspectionReportData } from "@av-inspection/report-generator";
-import { buildInspectionReportDocument, packToBlob } from "@av-inspection/report-generator";
+import { buildInspectionReportDocument, packToBlob, serializeReportDataForWire } from "@av-inspection/report-generator";
 import { assembleReportData } from "../../../../lib/report/assemble-report-data";
 import { saveGeneratedFile } from "../../../../lib/report/save-file";
 import { useSpeechDictation } from "../../../../lib/recording/use-speech-dictation";
@@ -125,12 +125,20 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
   function editTask(id: string, patch: Partial<InspectionReportData["tasks"][number]>) {
     setData((current) => current && { ...current, tasks: current.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
 
-    // Only description/responsibleParty/status are real, writable Task columns -- floorName/roomName are
-    // display-only derived strings with no direct write path back to Floor/Room (see this screen's own
-    // top comment).
-    const realPatch: { description?: string; responsibleParty?: string | null; status?: ReturnType<typeof TaskStatus.parse> } = {};
+    // Only description/responsibleParties/status are real, writable Task columns -- floorName/roomName
+    // are display-only derived strings with no direct write path back to Floor/Room (see this screen's
+    // own top comment).
+    const realPatch: { description?: string; responsibleParties?: string[]; status?: ReturnType<typeof TaskStatus.parse> } = {};
     if (patch.description !== undefined) realPatch.description = patch.description;
-    if (patch.responsibleParty !== undefined) realPatch.responsibleParty = patch.responsibleParty;
+    // This row's own responsibleParty field is still a single free-text display string (the report's
+    // ReportTaskRow contract, joined from the real array by assemble-report-data.ts) -- splitting it back
+    // on "," is the one place that string round-trips into Task.responsibleParties, the real array field.
+    if (patch.responsibleParty !== undefined) {
+      realPatch.responsibleParties = (patch.responsibleParty ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+    }
     if (patch.status !== undefined) realPatch.status = TaskStatus.parse(patch.status);
     if (Object.keys(realPatch).length > 0) {
       scheduleSave(`task:${id}`, () => updateTask(id, realPatch));
@@ -174,10 +182,13 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
         // still accepts raw DOCX bytes too, but only to keep an older caller shape working, and that path
         // is LibreOffice-only unconditionally (see the route's own comment) -- sending JSON is what makes
         // this button actually benefit from the new engine instead of silently keeping the old one.
+        // serializeReportDataForWire: plain JSON.stringify on a Uint8Array (every ReportPhoto's `bytes`)
+        // silently drops it to zero bytes on the other side -- see wire-format.ts's own doc comment for
+        // the real bug this was (logo/task photos silently missing from every PDF/XLSX export).
         const res = await fetch("/api/report/docx-to-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          body: JSON.stringify(serializeReportDataForWire(data)),
         });
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -192,7 +203,7 @@ export function ReportScreen({ inspectionId }: { inspectionId: string }) {
       const res = await fetch("/api/report/xlsx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(serializeReportDataForWire(data)),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;

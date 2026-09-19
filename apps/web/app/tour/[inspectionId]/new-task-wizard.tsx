@@ -45,7 +45,9 @@ export function NewTaskWizard({
   const [roomId, setRoomId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [description, setDescription] = useState("");
-  const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
+  // Multiple contractors can share responsibility for one task (user request: a checkbox multi-select
+  // list here, same pattern as the project's own "רשימת קבלנים" picker) -- was a single selected name.
+  const [responsibleParties, setResponsibleParties] = useState<Set<string>>(new Set());
   const [newResponsibleName, setNewResponsibleName] = useState("");
   // Ad-hoc names typed during THIS wizard session, before their task has actually been saved yet (so
   // `tourAdHocNames` below, which is derived from already-saved tasks, can't see them). Merged with that
@@ -88,22 +90,32 @@ export function NewTaskWizard({
     const contractorSet = new Set(contractorNames);
     const names = new Set<string>();
     for (const task of inspectionTasks ?? []) {
-      if (task.responsibleParty && !contractorSet.has(task.responsibleParty)) names.add(task.responsibleParty);
+      for (const name of task.responsibleParties) {
+        if (!contractorSet.has(name)) names.add(name);
+      }
     }
     return [...names];
   }, [inspectionTasks, contractorNames]);
 
+  // Grouped-by-domain checkbox list (user request: same pattern as ContractorPickerModal's "רשימת
+  // קבלנים" -- a real list with checkboxes, not a row of single-select chips). Real project contractors
+  // carry their own `field` (domain); ad-hoc/typed-only names have none, so they fall into the same
+  // "ללא קטגוריה" bucket ResponsibleStep groups under.
   const responsibleOptions = useMemo(() => {
     const seen = new Set<string>();
-    const combined: string[] = [];
-    for (const name of [...contractorNames, ...tourAdHocNames, ...sessionAdHocNames]) {
-      if (!seen.has(name)) {
-        seen.add(name);
-        combined.push(name);
-      }
+    const options: { name: string; field: string | null }[] = [];
+    for (const c of contractors ?? []) {
+      if (seen.has(c.companyName)) continue;
+      seen.add(c.companyName);
+      options.push({ name: c.companyName, field: c.field });
     }
-    return combined;
-  }, [contractorNames, tourAdHocNames, sessionAdHocNames]);
+    for (const name of [...tourAdHocNames, ...sessionAdHocNames]) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      options.push({ name, field: null });
+    }
+    return options;
+  }, [contractors, tourAdHocNames, sessionAdHocNames]);
 
   function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -120,13 +132,22 @@ export function NewTaskWizard({
     });
   }
 
+  function toggleResponsible(name: string) {
+    setResponsibleParties((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
   function handleAddResponsible() {
     const name = newResponsibleName.trim();
     if (!name) return;
-    if (!responsibleOptions.includes(name)) {
+    if (!responsibleOptions.some((option) => option.name === name)) {
       setSessionAdHocNames((current) => [...current, name]);
     }
-    setResponsibleParty(name);
+    setResponsibleParties((current) => new Set(current).add(name));
     setNewResponsibleName("");
   }
 
@@ -137,7 +158,7 @@ export function NewTaskWizard({
         projectId,
         inspectionId,
         description: description.trim() || "(ללא תיאור)",
-        responsibleParty,
+        responsibleParties: [...responsibleParties],
         floorId,
         roomId,
       });
@@ -196,8 +217,8 @@ export function NewTaskWizard({
         {step === 4 ? (
           <ResponsibleStep
             options={responsibleOptions}
-            selected={responsibleParty}
-            onSelect={setResponsibleParty}
+            selected={responsibleParties}
+            onToggle={toggleResponsible}
             newName={newResponsibleName}
             onNewNameChange={setNewResponsibleName}
             onAddNew={handleAddResponsible}
@@ -360,50 +381,122 @@ function DescriptionStep({
   );
 }
 
+const UNCATEGORIZED = "ללא קטגוריה";
+
+function groupByField(options: { name: string; field: string | null }[]): Array<[string, string[]]> {
+  const byField = new Map<string, string[]>();
+  for (const option of options) {
+    const key = option.field?.trim() || UNCATEGORIZED;
+    const list = byField.get(key) ?? [];
+    list.push(option.name);
+    byField.set(key, list);
+  }
+  return [...byField.entries()].sort(([a], [b]) => {
+    if (a === UNCATEGORIZED) return 1;
+    if (b === UNCATEGORIZED) return -1;
+    return a.localeCompare(b, "he");
+  });
+}
+
+/**
+ * A real, grouped, checkbox-driven list (user request: replace the old single-select chip row with the
+ * same "list + checkbox, multiple selection" pattern already used to associate contractors with a
+ * project — see projects/[id]/contractor-picker-modal.tsx, which this mirrors) -- a task can now be
+ * shared by more than one contractor.
+ */
 function ResponsibleStep({
   options,
   selected,
-  onSelect,
+  onToggle,
   newName,
   onNewNameChange,
   onAddNew,
 }: {
-  options: string[];
-  selected: string | null;
-  onSelect: (name: string) => void;
+  options: { name: string; field: string | null }[];
+  selected: Set<string>;
+  onToggle: (name: string) => void;
+  newName: string;
+  onNewNameChange: (value: string) => void;
+  onAddNew: () => void;
+}) {
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const groups = useMemo(() => groupByField(options), [options]);
+  const visibleGroups = activeFilter ? groups.filter(([field]) => field === activeFilter) : groups;
+
+  if (options.length === 0) {
+    return (
+      <div>
+        <p className={styles.skipHint}>אין עדיין קבלנים רשומים בפרויקט זה — אפשר להוסיף ידנית למטה.</p>
+        <AddResponsibleRow newName={newName} onNewNameChange={onNewNameChange} onAddNew={onAddNew} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {groups.length > 1 ? (
+        <div className={styles.filterRow}>
+          <button
+            type="button"
+            className={`${styles.filterChip} ${activeFilter === null ? styles.filterChipActive : ""}`}
+            onClick={() => setActiveFilter(null)}
+          >
+            הכל ({options.length})
+          </button>
+          {groups.map(([field, names]) => (
+            <button
+              key={field}
+              type="button"
+              className={`${styles.filterChip} ${activeFilter === field ? styles.filterChipActive : ""}`}
+              onClick={() => setActiveFilter(field)}
+            >
+              {field} ({names.length})
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {visibleGroups.map(([field, names]) => (
+        <section key={field} className={styles.responsibleGroup}>
+          {groups.length > 1 ? <h2 className={styles.groupTitle}>{field}</h2> : null}
+          <ul className={styles.responsibleList}>
+            {names.map((name) => (
+              <li key={name}>
+                <label className={`${styles.responsibleRow} ${selected.has(name) ? styles.responsibleRowSelected : ""}`}>
+                  <input type="checkbox" checked={selected.has(name)} onChange={() => onToggle(name)} />
+                  <span className={styles.responsibleRowName}>{name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      <AddResponsibleRow newName={newName} onNewNameChange={onNewNameChange} onAddNew={onAddNew} />
+    </div>
+  );
+}
+
+function AddResponsibleRow({
+  newName,
+  onNewNameChange,
+  onAddNew,
+}: {
   newName: string;
   onNewNameChange: (value: string) => void;
   onAddNew: () => void;
 }) {
   return (
-    <div>
-      {options.length > 0 ? (
-        <div className={styles.participantGrid}>
-          {options.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className={`${styles.participantChip} ${name === selected ? styles.participantChipActive : ""}`}
-              onClick={() => onSelect(name)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className={styles.skipHint}>אין עדיין קבלנים רשומים בפרויקט זה — אפשר להוסיף ידנית למטה.</p>
-      )}
-      <div className={styles.addParticipantRow}>
-        <input
-          placeholder="הוסף קבלן שלא ברשימה"
-          value={newName}
-          onChange={(event) => onNewNameChange(event.target.value)}
-          aria-label="הוסף קבלן שלא ברשימה"
-        />
-        <button type="button" onClick={onAddNew}>
-          הוסף
-        </button>
-      </div>
+    <div className={styles.addParticipantRow}>
+      <input
+        placeholder="הוסף קבלן שלא ברשימה"
+        value={newName}
+        onChange={(event) => onNewNameChange(event.target.value)}
+        aria-label="הוסף קבלן שלא ברשימה"
+      />
+      <button type="button" onClick={onAddNew}>
+        הוסף
+      </button>
     </div>
   );
 }

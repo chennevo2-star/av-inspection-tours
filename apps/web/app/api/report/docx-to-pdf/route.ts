@@ -4,8 +4,9 @@ import {
   buildInspectionReportPdf,
   packToBuffer,
   packPdfToBuffer,
+  deserializeReportDataFromWire,
 } from "@av-inspection/report-generator";
-import type { InspectionReportData } from "@av-inspection/report-generator";
+import type { WireInspectionReportData } from "@av-inspection/report-generator";
 import { toArrayBuffer } from "../to-array-buffer";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -71,12 +72,12 @@ async function convertDocxToPdfViaLibreOffice(docxBytes: Uint8Array): Promise<Ui
 /** Loose but real shape check -- this route has no existing zod schema for InspectionReportData to
  * reuse, and introducing one is out of this change's scope; this catches the obviously-wrong-body case
  * (missing/malformed JSON) with an honest 400 rather than crashing deep inside the PDF/DOCX builders. */
-function isLikelyInspectionReportData(value: unknown): value is InspectionReportData {
+function isLikelyInspectionReportData(value: unknown): value is WireInspectionReportData {
   return (
     !!value &&
     typeof value === "object" &&
-    Array.isArray((value as InspectionReportData).tasks) &&
-    typeof (value as InspectionReportData).projectName === "string"
+    Array.isArray((value as WireInspectionReportData).tasks) &&
+    typeof (value as WireInspectionReportData).projectName === "string"
   );
 }
 
@@ -119,7 +120,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const data = body;
+    // Reverses serializeReportDataForWire's base64 encoding of every ReportPhoto's bytes -- see
+    // wire-format.ts's own doc comment for the real silent-data-loss bug this closes.
+    const data = deserializeReportDataFromWire(body);
 
     if (useLibreOffice) {
       const docxBytes = await packToBuffer(buildInspectionReportDocument(data));

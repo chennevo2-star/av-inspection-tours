@@ -86,7 +86,7 @@ function TaskCard({ task, floorName, roomName }: { task: Task; floorName?: strin
       </div>
       <p className={styles.description}>{task.description}</p>
       <div className={styles.metaRow}>
-        <span>{task.responsibleParty ? <>באחריות: <span className={styles.responsible}>{task.responsibleParty}</span></> : "לא הוגדר אחראי"}</span>
+        <span>{task.responsibleParties.length > 0 ? <>באחריות: <span className={styles.responsible}>{task.responsibleParties.join(", ")}</span></> : "לא הוגדר אחראי"}</span>
         <span>{task.status}</span>
       </div>
       {photos && photos.length > 0 ? (

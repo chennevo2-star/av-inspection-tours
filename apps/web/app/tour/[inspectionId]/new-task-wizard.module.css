@@ -232,26 +232,74 @@
   font-size: 13px;
 }
 
-/* Step 4: responsible */
-.participantGrid {
+/* Step 4: responsible (grouped checkbox list -- mirrors projects/[id]/contractor-picker-modal.module.css) */
+.filterRow {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 18px;
 }
 
-.participantChip {
+.filterChip {
   background: var(--surface);
-  border: 2px solid var(--surface-2);
+  border: 1px solid var(--surface-2);
   border-radius: 999px;
-  padding: 12px 18px;
-  font-size: 15px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
-.participantChipActive {
-  border-color: var(--accent);
+.filterChipActive {
   background: var(--accent);
+  border-color: var(--accent);
   color: white;
+  font-weight: 600;
+}
+
+.responsibleGroup {
+  margin-bottom: 16px;
+}
+
+.groupTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.responsibleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.responsibleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.responsibleRowSelected {
+  border-color: var(--accent);
+}
+
+.responsibleRow input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.responsibleRowName {
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .addParticipantRow {

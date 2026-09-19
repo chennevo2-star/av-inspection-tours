@@ -185,7 +185,10 @@ export const tasks = pgTable("tasks", {
   roomId: uuid("room_id").references(() => rooms.id),
   friendlyNumber: integer("friendly_number"),
   description: text("description").notNull(),
-  responsibleParty: text("responsible_party"),
+  // Multiple contractors can share responsibility for one task (session's user request, 2026-09-19) --
+  // was a single nullable `responsible_party` text column; migration 0009 converts existing values into
+  // one-element arrays rather than dropping them.
+  responsibleParties: text("responsible_parties").array().notNull().default([]),
   status: taskStatusEnum("status").notNull().default("פתוח"),
   // cascade: a task genuinely belongs to whichever inspection created it (deleteInspection() in
   // apps/web/lib/db/inspections.ts already deletes it locally on that same basis -- this makes the server

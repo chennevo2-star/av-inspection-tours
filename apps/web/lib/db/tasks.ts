@@ -6,7 +6,7 @@ export interface CreateTaskInput {
   projectId: string;
   inspectionId: string;
   description: string;
-  responsibleParty?: string | null;
+  responsibleParties?: string[];
   floorId?: string | null;
   roomId?: string | null;
 }
@@ -24,7 +24,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     roomId: input.roomId ?? null,
     friendlyNumber: existingCount + 1,
     description: input.description,
-    responsibleParty: input.responsibleParty ?? null,
+    responsibleParties: input.responsibleParties ?? [],
     status: "פתוח",
     createdInspectionId: input.inspectionId,
     lastUpdatedInspectionId: null,
@@ -77,13 +77,13 @@ export async function closeTask(id: string, closedInspectionId: string): Promise
 /**
  * Field-text edits made on the report screen's task table (user request: those edits must actually save
  * back to the real task, not just shape one export) -- deliberately narrow to the fields the report
- * screen's row editor actually exposes as real Task columns (description/responsibleParty/status);
+ * screen's row editor actually exposes as real Task columns (description/responsibleParties/status);
  * floorName/roomName there are display-only derived strings with no direct write path back to
  * Floor/Room, so they're never accepted here.
  */
 export async function updateTask(
   id: string,
-  patch: Partial<Pick<Task, "description" | "responsibleParty" | "status">>
+  patch: Partial<Pick<Task, "description" | "responsibleParties" | "status">>
 ): Promise<Task> {
   const db = getLocalDb();
   const existing = await db.tasks.get(id);

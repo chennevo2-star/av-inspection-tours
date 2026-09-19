@@ -320,7 +320,9 @@ export const Task = z.object({
   roomId: uuid().nullable().default(null),
   friendlyNumber: z.number().int().nullable().default(null),
   description: z.string().min(1),
-  responsibleParty: z.string().nullable().default(null),
+  // Multiple contractors can share responsibility for one task (session's user request, 2026-09-19) --
+  // was a single nullable string; an empty array means "no one assigned yet" (the old field's `null`).
+  responsibleParties: z.array(z.string()).default([]),
   status: TaskStatus.default("פתוח"),
   createdInspectionId: uuid(),
   lastUpdatedInspectionId: uuid().nullable().default(null),

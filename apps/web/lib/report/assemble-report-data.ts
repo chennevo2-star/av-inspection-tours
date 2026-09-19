@@ -4,29 +4,26 @@ import { listTasksForInspection } from "../db/tasks";
 import { getPhotoBlob } from "../db/photos";
 import { getInspector, getInspectorStampBlob } from "../db/inspectors";
 import { formatTourName } from "../format-tour-name";
+import { LOGO_LSHACHAR_PNG_BASE64 } from "./logo-data";
 
 /** Fixed business fact, not per-project data — spec names this specific office. */
 const OFFICE_NAME = "ל.שחר";
 
 /**
- * Static asset path for the office logo (spec: "must include the ל.שחר logo"). The real file lives at
- * apps/web/public/logo-lshachar.png. If it's ever missing (a fresh checkout without that asset, or the
- * file gets moved/renamed), this fetch 404s and `logo` comes back `null` -- the report still generates
- * correctly without one (build-docx.ts's/build-pdf.ts's cover pages just omit the image), per the
- * no-mock-success rule: an absent logo is shown honestly as absent, never faked.
+ * The office logo (spec: "must include the ל.שחר logo"), embedded as a base64 constant (logo-data.ts)
+ * rather than fetched over the network at report-generation time -- a real bug found here (user report,
+ * 2026-09-19): a genuinely generated report showed no logo despite the file existing and being
+ * independently confirmed fetchable, most likely a transient network condition on a real mobile device at
+ * the exact moment this ran, silently swallowed by the old fetch()'s own try/catch (by design -- an absent
+ * logo must never fail report generation). Embedding removes the network dependency entirely, matching how
+ * this app's report fonts are already embedded (packages/report-generator/src/hebrew-font-data.ts) for the
+ * identical reason, and fits the offline-first mandate better than a network fetch ever did.
  */
-const LOGO_PATH = "/logo-lshachar.png";
-
-async function loadLogo(): Promise<ReportPhoto | null> {
-  try {
-    const res = await fetch(LOGO_PATH);
-    if (!res.ok) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length === 0) return null;
-    return { bytes, mimeType: res.headers.get("content-type") || "image/png" };
-  } catch {
-    return null;
-  }
+function loadLogo(): ReportPhoto {
+  const binary = atob(LOGO_LSHACHAR_PNG_BASE64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return { bytes, mimeType: "image/png" };
 }
 
 // Every report photo displays at a small fixed size regardless of format (build-docx.ts's own
@@ -141,7 +138,10 @@ export async function assembleReportData(inspectionId: string): Promise<Inspecti
         floorName: task.floorId ? (floorById.get(task.floorId)?.name ?? null) : null,
         roomName: task.roomId ? (roomById.get(task.roomId)?.name ?? null) : null,
         description: task.description,
-        responsibleParty: task.responsibleParty,
+        // Task.responsibleParties is an array (multiple contractors can share one task); the report
+        // contract itself stays a single printable string -- joins here, at the presentation boundary,
+        // so build-pdf.ts/build-docx.ts/build-xlsx.ts don't need to know about the underlying array.
+        responsibleParty: task.responsibleParties.length > 0 ? task.responsibleParties.join(", ") : null,
         status: task.status,
         photos: resolvedPhotos.filter((p): p is ReportPhoto => p !== null),
       };

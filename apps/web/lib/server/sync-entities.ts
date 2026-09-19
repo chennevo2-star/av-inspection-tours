@@ -152,7 +152,7 @@ export const JSON_SYNC_HANDLERS: Partial<Record<string, JsonSyncHandler>> = {
     roomId: t.roomId,
     friendlyNumber: t.friendlyNumber,
     description: t.description,
-    responsibleParty: t.responsibleParty,
+    responsibleParties: t.responsibleParties,
     status: t.status,
     createdInspectionId: t.createdInspectionId,
     lastUpdatedInspectionId: t.lastUpdatedInspectionId,
