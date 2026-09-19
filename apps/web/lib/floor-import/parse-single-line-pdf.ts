@@ -70,7 +70,16 @@ export function detectFloorsFromTextItems(items: PositionedText[]): DetectedFloo
  */
 export async function extractFloorsFromPdfBytes(data: Uint8Array): Promise<DetectedFloor[]> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  // A real production bug found here (user report, 2026-09-19, real "undefined is not a function" on a
+  // real uploaded riser-diagram PDF): `new URL("pdfjs-dist/...", import.meta.url)` for the worker path is
+  // the SAME class of bug already hit once this session with the embedded Hebrew font (see
+  // hebrew-font-data.ts's own comment) -- `import.meta.url` doesn't point at a real on-disk/servable
+  // location once webpack wraps this module for the browser, so the derived worker URL resolves to
+  // nonsense; pdf.js then fails obscurely trying to use a worker that never loaded correctly. Serving the
+  // worker file as a plain static public asset (copied once from node_modules/pdfjs-dist/build/, same as
+  // this app already does for its logo/fonts) and referencing it by a fixed absolute path sidesteps the
+  // whole bundler-resolution problem -- there's no path for a bundler to get wrong.
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
   const doc = await pdfjs.getDocument({ data }).promise;
 
