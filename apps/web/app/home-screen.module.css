@@ -14,7 +14,13 @@
 
 .title {
   font-size: 28px;
-  margin: 0;
+  margin: 8px 0 0;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 4px 0 28px;
 }
 
 .inspectorsLink {
@@ -26,6 +32,34 @@
   border-radius: 999px;
   padding: 8px 14px;
   white-space: nowrap;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menuCard {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s ease;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.menuCard:hover {
+  background: var(--surface-2);
+}
+
+.menuIcon {
+  font-size: 26px;
 }
 
 .recoveryBanner {

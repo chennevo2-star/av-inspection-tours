@@ -41,7 +41,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
   if (lookup === undefined || lookup.state === "loading") {
     return (
       <main className={styles.main}>
-        <Link href="/" className={styles.backLink}>
+        <Link href="/projects" className={styles.backLink}>
           ← חזרה לפרויקטים
         </Link>
         <p className={styles.emptyHint}>טוען…</p>
@@ -52,7 +52,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
   if (lookup.state === "not-found") {
     return (
       <main className={styles.main}>
-        <Link href="/" className={styles.backLink}>
+        <Link href="/projects" className={styles.backLink}>
           ← חזרה לפרויקטים
         </Link>
         <p className={styles.emptyHint}>הפרויקט לא נמצא במכשיר זה.</p>
@@ -102,7 +102,7 @@ function ProjectBody({ project }: { project: Project }) {
 
   return (
     <main className={styles.main}>
-      <Link href="/" className={styles.backLink}>
+      <Link href="/projects" className={styles.backLink}>
         ← חזרה לפרויקטים
       </Link>
       <h1 className={styles.title}>{project.name}</h1>

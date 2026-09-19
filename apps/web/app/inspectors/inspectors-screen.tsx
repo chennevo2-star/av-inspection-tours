@@ -46,8 +46,8 @@ export function InspectorsScreen() {
 
   return (
     <main className={styles.main}>
-      <Link href="/" className={styles.backLink}>
-        ← חזרה
+      <Link href="/settings" className={styles.backLink}>
+        ← חזרה להגדרות
       </Link>
       <h1 className={styles.title}>עריכת מפקח</h1>
       <p className={styles.hint}>בנק המפקחים משמש לבחירת המפקח בתחילת סיור, וחותמת המפקח מוטמעת בסוף דו״ח שיוצא.</p>

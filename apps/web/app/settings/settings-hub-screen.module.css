@@ -1,0 +1,68 @@
+.main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+.backLink {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  display: inline-block;
+  margin-bottom: 16px;
+}
+
+.backLink:hover {
+  color: var(--text);
+}
+
+.title {
+  font-size: 26px;
+  margin: 0 0 20px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s ease;
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.rowIcon {
+  font-size: 22px;
+}
+
+.rowText {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowLabel {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rowHint {
+  font-size: 13px;
+  color: var(--text-muted);
+}

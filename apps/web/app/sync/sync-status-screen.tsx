@@ -75,8 +75,8 @@ export function SyncStatusScreen() {
 
   return (
     <main className={styles.main}>
-      <Link href="/" className={styles.backLink}>
-        ← חזרה לפרויקטים
+      <Link href="/settings" className={styles.backLink}>
+        ← חזרה להגדרות
       </Link>
       <h1 className={styles.title}>מצב סנכרון</h1>
 
